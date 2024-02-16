@@ -10,6 +10,27 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="/results/001_dummy_test_20240216131640.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/results/001_dummy_test_20240216135416.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="/results/001_dummy_test_20240216140105.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="/tests/001_dummy_test.csv">
           <value>
             <Attribute>

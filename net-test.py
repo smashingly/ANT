@@ -24,15 +24,17 @@ def run_test(id_number, ssh_command, log_file, output_csv):
             log.write(f"Test {id_number}: Success. Result: {rtt_results}\n")
 
         # Parse out the actual ping statistics from the relevant line in the output
-        # TODO: try replacing the line below with ping_result = rtt_results[0].split('=')[1].strip()
-        ping_result = [line for line in result.split('\n') if 'min/avg/max' in line][0].split('=')[1].strip()
-        min, avg, max, stddev = ping_result.split('/')
+        # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
+        ping_result = rtt_results[0].replace(" ms", "").split('=')[1].strip()
+
+        # ping_result now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by '/'
+        min_rtt, avg_rtt, max_rtt, stddev_rtt = ping_result.split('/')
 
         # Write a row into the output CSV file. We may later change this to output JSON (or something else that
         # influxdb likes.)
         with open(output_csv, 'a') as output:
             writer = csv.writer(output)
-            writer.writerow([id_number, min, avg, max, stddev, ssh_command])
+            writer.writerow([id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, ssh_command])
     except subprocess.CalledProcessError as e:
         print(f"Test {id_number}: Failure. Command: '{ssh_command}'")
         with open(log_file, 'a') as log:
