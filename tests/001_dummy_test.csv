@@ -1,0 +1,2 @@
+1,ping -c 10 -i 0.2 localhost
+2,ping -c 10 -i 0.5 8.8.8.8
