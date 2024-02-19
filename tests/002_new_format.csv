@@ -1,0 +1,5 @@
+#test_type, destination, count, size
+ping,8.8.8.8,10,,
+ping,raspberrypi,10,,
+throughput,raspberrypi,,1000
+jitter,raspberrypi,,,
