@@ -1,3 +1,4 @@
+import json
 import subprocess
 import csv
 import os
@@ -6,7 +7,7 @@ import logging
 import sys
 
 
-def run_test(id_number, ssh_command):
+def run_test_old(id_number, ssh_command):
     # TODO: we may change this function to take source, dest, and other parameters, as these need to be known
     #  for outputting results that influxdb/Grafana can use later. The question is how we can construct the SSH
     #  command from these parameters, as currently it's quite handily included in the input CSV file. An easy hack
@@ -47,16 +48,87 @@ def run_test(id_number, ssh_command):
         return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, ssh_command]
 
 
-def read_input_csv(input_csv):
+def run_ping_test(test_dict: dict) -> list:
+    """
+    Run a ping test based on the parameters in the input dictionary. The dictionary should contain the following keys:
+    - id_number: a unique identifier for the test. Mandatory.
+    - source: the source IP or hostname for the test. Used for constructing the test command (ie. local or SSH).
+    Default is 'localhost'
+    - destination: the destination IP or hostname for the test. Mandatory.
+    - count: the number of pings to send (optional; default 10)
+    - size: the size of the ping packet (optional; default 56 bytes)
+    :param test_dict: a dictionary containing the parameters for the test
+    :return: a list containing the results of the test
+    """
+
+
+    id_number = test_dict['id_number']                  # this is a required field, so we can assume it's present
+    source = test_dict.get('source', 'localhost')       # if value was missing from CSV, assume 'localhost'
+    destination = test_dict['destination']              # required field
+    count = test_dict.get('count', 10)                  # optional field; set default of 10 pings if not present
+    size = test_dict.get('size', 56)                    # optional field; go for 56 byte packet size if not present
+    username = "ash"                        # temporarily hard-code this for now
+    interval = 0.2                          # temporarily hard-code this for now
+
+    test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
+
+    if source not in ["localhost", "127.0.0.1"]:
+        test_command = f"ssh -n -o ConnectTimeout=2 {username}@{source} '{test_command}'"
+
+    try:
+        # Execute the command and get the result - this currently is customised for a ping test
+        result = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
+
+        # Look for the line in the ping stats and assign it to rtt_results
+        rtt_results = [line for line in result.split('\n') if 'min/avg/max' in line]
+
+        # Log output to the screen and to logfile - we'll convert this later to use the logging module
+        # TODO: we're leaving the separate print() statement here for now, because the logger will only display
+        #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). We can
+        #  change this later, but for now, we'll leave the print() statement.
+        msg = f"Test {id_number}: Success. Result: {rtt_results}"
+        print(msg)
+        logger.info(msg)
+
+        # Parse out the actual ping statistics from the relevant line in the output. Split at "="
+        # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
+        ping_result = rtt_results[0].replace(" ms", "").split('=')[1].strip()
+
+        # ping_result now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
+        min_rtt, avg_rtt, max_rtt, stddev_rtt = ping_result.split('/')
+        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+
+    except subprocess.CalledProcessError as e:
+        t_stamp = datetime.datetime.now()
+        logger.error(f"***************************************************************************************")
+        logger.error(f"{t_stamp}  Test #{id_number} (command '{test_command}') failed. Full output of test:")
+        logger.error(e.output.decode())
+        logger.error(f"***************************************************************************************")
+
+        # if something failed in the command, we'll set the RTT values to None
+        min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
+        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+
+
+def read_input_file(filename):
     # Read the input CSV file and return a list of dicts, each line being mapped to a dictionary, based on the
     # header row of the CSV file. The first character of the header row is "#" and this should be ignored when
-    # constructing the first column's name.  Current header row = #test_type, destination, count, size
+    # constructing the first column's name.  Current header row = #id_number,test_type,destination,count,size
 
-    with open(input_csv, 'r') as input_file:
+    with open(filename, 'r') as input_file:
         reader = csv.reader(input_file)
         header = next(reader)
         header = [h.lstrip('#') for h in header]
-        data = [dict(zip(header, row)) for row in reader]
+        data = []
+
+        # Construct a dictionary from the row's data, converting empty CSV values to None.
+        for row in reader:
+            row_dict = {header[i]: value if value != "" else None for i, value in enumerate(row)}
+            # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
+            #  assign default values to missing test command parameters in the test-running function(s).
+            row_dict = {k: v for k, v in row_dict.items() if v is not None}
+            data.append(row_dict)
+
     return data
 
 
@@ -119,11 +191,23 @@ with open(output_csv, 'a') as output:
     writer = csv.writer(output)
     writer.writerow(["", "", "", "", "", f"---------- Test initiated at {datetime.datetime.now()} ----------"])
 
-tests = read_input_csv(input_csv)  # a list of dictionaries, each dict representing a test to be run
+tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 
 for test in tests:
-    # print(f"I will run these tests: {id_number}, {ssh_command}")
-    results = run_test(id_number=test['id_number'], ssh_command=test['ssh_command'])
+    test_type = test['test_type']
+    logger.debug(f"Test type: {test_type} will be run.")
+    if test_type == "ping":
+        results = run_ping_test(test)
+    elif test_type == "throughput":
+        results = ""  # temporary code
+        pass
+    elif test_type == "jitter":
+        results = ""  # temporary code
+        pass
+    else:
+        logger.error(f"Unknown test type: {test_type}. Skipping test.")
+        continue
+
     with open(output_csv, 'a') as output:
         writer = csv.writer(output)
         writer.writerow(results)

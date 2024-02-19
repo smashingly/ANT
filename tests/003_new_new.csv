@@ -1,0 +1,6 @@
+#id_number,test_type,source,destination,count,size
+1,ping,localhost,8.8.8.8,10,,
+2,ping,localhost,raspberrypi,10,,
+3,ping,raspberrypi,192.168.0.1,,
+4,throughput,raspberrypi,,1000
+5,jitter,raspberrypi,,,
