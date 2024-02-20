@@ -6,49 +6,101 @@ import datetime
 import logging
 import sys
 
-
-def run_test_old(id_number, ssh_command):
-    # TODO: we may change this function to take source, dest, and other parameters, as these need to be known
-    #  for outputting results that influxdb/Grafana can use later. The question is how we can construct the SSH
-    #  command from these parameters, as currently it's quite handily included in the input CSV file. An easy hack
-    #  for now would be to replace id_number with a description field, eg. "ping from edats003 to az-syd-vm". That
-    #  would give influxdb a unique (ish) identifier for each row.
-    try:
-        # Execute the command and get the result - this currently is customised for a ping test
-        result = subprocess.check_output(ssh_command, shell=True, stderr=subprocess.STDOUT).decode()
-
-        # Look for the line in the ping stats and assign it to rtt_results
-        rtt_results = [line for line in result.split('\n') if 'min/avg/max' in line]
-
-        # Log output to the screen and to logfile - we'll convert this later to use the logging module
-        # TODO: we're leaving the separate print() statement here for now, because the logger will only display
-        #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). We can
-        #  change this later, but for now, we'll leave the print() statement.
-        msg = f"Test {id_number}: Success. Result: {rtt_results}"
-        print(msg)
-        logger.info(msg)
-
-        # Parse out the actual ping statistics from the relevant line in the output. Split at "="
-        # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
-        ping_result = rtt_results[0].replace(" ms", "").split('=')[1].strip()
-
-        # ping_result now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
-        min_rtt, avg_rtt, max_rtt, stddev_rtt = ping_result.split('/')
-        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, ssh_command]
-
-    except subprocess.CalledProcessError as e:
-        t_stamp = datetime.datetime.now()
-        logger.error(f"***************************************************************************************")
-        logger.error(f"{t_stamp}  Test #{id_number} (command '{ssh_command}') failed. Full output of test:")
-        logger.error(e.output.decode())
-        logger.error(f"***************************************************************************************")
-
-        # if something failed in the command, we'll set the RTT values to None
-        min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
-        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, ssh_command]
+TEST_TYPES = ["latency", "throughput", "jitter"]
 
 
-def run_ping_test(test_dict: dict) -> list:
+def parse_ping_results(test_data: dict):
+
+    id_number = test_data['id_number']
+    test_command = test_data['test_command']
+    raw_output = test_data['raw_output']
+
+    result_rtt_text = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
+
+    # Log output to the screen and to logfile - we'll convert this later to use the logging module
+    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
+    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
+    #  want to change the console logging level away from ERROR. We can change this later.
+    msg = f"Test {id_number}: Success. Result: {result_rtt_text}"
+    print(msg)
+    logger.info(msg)
+
+    # Parse out the actual ping statistics from the relevant line in the output. Split at "="
+    # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
+    rtt_data = result_rtt_text[0].replace(" ms", "").split('=')[1].strip()
+
+    # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
+    min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
+
+    return {
+        "id_number": id_number,
+        "timestamp": str(test_data['timestamp']),
+        "source": test_data['test_params']['source'],
+        "destination": test_data['test_params']['destination'],
+        "min_rtt": min_rtt,
+        "avg_rtt": avg_rtt,
+        "max_rtt": max_rtt,
+        "stddev_rtt": stddev_rtt,
+        "test_command": test_command
+    }
+    # return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+
+
+def parse_iperf_results(test_data: dict):
+    # iperf3 output is in JSON format, and for a throughput test, the data we need is at
+    # (data).end.sum_received.seconds, .bytes, and .bits_per_second.
+
+    id_number = test_data['id_number']
+    test_command = test_data['test_command']
+    raw_output = test_data['raw_output']
+    test_type = test_data['test_params']['test_type']
+
+    # Convert the JSON string to a Python dictionary
+    command_result = json.loads(raw_output)
+
+    if test_type == "throughput":
+        return {
+            "id_number": id_number,
+            "timestamp": str(test_data['timestamp']),
+            "source": test_data['test_params']['source'],
+            "destination": test_data['test_params']['destination'],
+            "seconds": command_result['end']['sum_sent']['seconds'],
+            "bytes": command_result['end']['sum_sent']['bytes'],
+            "bits_per_second": command_result['end']['sum_sent']['bits_per_second'],
+            "test_command": test_command
+        }
+    elif test_type == "jitter":
+        return {
+            "id_number": id_number,
+            "timestamp": str(test_data['timestamp']),
+            "source": test_data['test_params']['source'],
+            "destination": test_data['test_params']['destination'],
+            "jitter_ms": command_result['end']['sum']['jitter_ms'],
+            "packets": command_result['end']['sum']['packets'],
+            "lost_packets": command_result['end']['sum']['lost_packets'],
+            "test_command": test_command
+        }
+
+
+def parse_results(id_number, timestamp, test_params, test_command, raw_output):
+    # This is a wrapper function to make the code inside run_test() tidier. It just calls the relevant parse function.
+    #  This abstraction also makes it easier add more test types in future.
+
+    test_data = {
+        "id_number": id_number,
+        "timestamp": str(timestamp),
+        "test_params": test_params,
+        "test_command": test_command,
+        "raw_output": raw_output
+    }
+
+    if test_params['test_type'] == "latency":
+        return parse_ping_results(test_data)
+    elif test_params['test_type'] in ["throughput", "jitter"]:
+        return parse_iperf_results(test_data)
+
+
+def run_test(test_params: dict):
     """
     Run a ping test based on the parameters in the input dictionary. The dictionary should contain the following keys:
     - id_number: a unique identifier for the test. Mandatory.
@@ -57,46 +109,47 @@ def run_ping_test(test_dict: dict) -> list:
     - destination: the destination IP or hostname for the test. Mandatory.
     - count: the number of pings to send (optional; default 10)
     - size: the size of the ping packet (optional; default 56 bytes)
-    :param test_dict: a dictionary containing the parameters for the test
+    :param test_params: a dictionary containing the parameters for the test
     :return: a list containing the results of the test
     """
+    id_number = test_params['id_number']  # this is a required field, so we can assume it's present
+    source = test_params.get('source', 'localhost')  # if value was missing from CSV, assume 'localhost'
+    destination = test_params['destination']  # required field
+    # TODO: come up with a better way to handle the username. Probably need a separate config file with hosts/accounts
+    username = "ash"  # temporarily hard-code this for now
 
+    if test_params['test_type'] == "latency":
+        size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
+        count = test_params.get('count', 10)  # optional field; set default of 10 pings if not specified
+        # TODO: do something better for the interval later. Config file, or separate CSV field?
+        interval = 0.2  # temporarily hard-code this for now
+        test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
 
-    id_number = test_dict['id_number']                  # this is a required field, so we can assume it's present
-    source = test_dict.get('source', 'localhost')       # if value was missing from CSV, assume 'localhost'
-    destination = test_dict['destination']              # required field
-    count = test_dict.get('count', 10)                  # optional field; set default of 10 pings if not present
-    size = test_dict.get('size', 56)                    # optional field; go for 56 byte packet size if not present
-    username = "ash"                        # temporarily hard-code this for now
-    interval = 0.2                          # temporarily hard-code this for now
+    elif test_params['test_type'] == "throughput":
+        size = test_params.get('size', None)  # mandatory for throughput tests - throw exception if missing
+        if size is None:
+            logger.error(f"Size parameter missing for test {id_number}. This field is required for throughput tests.")
+            raise ValueError(
+                f"Size parameter missing for test {id_number}. This field is required for throughput tests.")
+        else:
+            test_command = f"iperf3 -c {destination} -n {size} -4 --json"
+    elif test_params['test_type'] == "jitter":
+        test_command = f"iperf3 -c {destination} -u -4 --json"
+    else:
+        logger.error(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
+        raise ValueError(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
 
-    test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
-
+    # If it's a test to execute remotely then we need to construct an SSH command to run the test on the remote host
     if source not in ["localhost", "127.0.0.1"]:
         test_command = f"ssh -n -o ConnectTimeout=2 {username}@{source} '{test_command}'"
 
+    timestamp = datetime.datetime.now()
+    logger.info(f"{timestamp}  Test #{id_number} initiated. Running command: {test_command}")
+
     try:
-        # Execute the command and get the result - this currently is customised for a ping test
-        result = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
-
-        # Look for the line in the ping stats and assign it to rtt_results
-        rtt_results = [line for line in result.split('\n') if 'min/avg/max' in line]
-
-        # Log output to the screen and to logfile - we'll convert this later to use the logging module
-        # TODO: we're leaving the separate print() statement here for now, because the logger will only display
-        #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). We can
-        #  change this later, but for now, we'll leave the print() statement.
-        msg = f"Test {id_number}: Success. Result: {rtt_results}"
-        print(msg)
-        logger.info(msg)
-
-        # Parse out the actual ping statistics from the relevant line in the output. Split at "="
-        # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
-        ping_result = rtt_results[0].replace(" ms", "").split('=')[1].strip()
-
-        # ping_result now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
-        min_rtt, avg_rtt, max_rtt, stddev_rtt = ping_result.split('/')
-        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+        # Execute the command and get the result
+        raw_output = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
+        print(f"Raw output type: {type(raw_output)}.  Raw output:\n {raw_output}")
 
     except subprocess.CalledProcessError as e:
         t_stamp = datetime.datetime.now()
@@ -105,9 +158,18 @@ def run_ping_test(test_dict: dict) -> list:
         logger.error(e.output.decode())
         logger.error(f"***************************************************************************************")
 
-        # if something failed in the command, we'll set the RTT values to None
+        # TODO: Fix this, this is the old code for dealing with ping failures. Need to genericise it so that it can
+        #  handle any test type gracefully.
+        # If something failed in the command, we'll set the RTT values to None
         min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
         return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+
+    else:   # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
+        print(f"Trying to parse results for test {id_number} now...")
+        p_results = parse_results(id_number=id_number, timestamp=timestamp, test_params=test_params,
+                             test_command=test_command, raw_output=raw_output)
+        print(f"Parsed results: {p_results}")
+        return p_results
 
 
 def read_input_file(filename):
@@ -152,8 +214,8 @@ out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 # TODO: This approach creates new files upon each program run, to avoid overwriting previous results. But over time
 #  it will result in a lot of files, so we may want to add log file rotation, to manage log files better. E.g.,
 #  keep the last 28 days worth of logs, and delete any old ones.
-log_file = os.path.join(output_dir, f"{out_basename}.log")
-output_csv = os.path.join(output_dir, f"{out_basename}.csv")
+log_file = os.path.join(output_dir, f"{base_name}.log")     # FIXME: temporarily changed it to basename while debugging
+output_file = os.path.join(output_dir, f"{out_basename}.json")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
 #  a certain age, to avoid filling up the disk with old files.
 
@@ -182,34 +244,30 @@ logger.addHandler(f_handler)
 logger.info("*" * 20 + f" Initial startup at: {datetime.datetime.now()} " + "*" * 20)
 logger.info(f"Input CSV file: {input_csv}")
 
-# If the output file doesn't exist (extremely likely), create it and write the header row
-if not os.path.exists(output_csv):
-    with open(output_csv, 'w') as output:
-        writer = csv.writer(output)
-        writer.writerow(["id_number", "min", "avg", "max", "stddev", "command"])
-with open(output_csv, 'a') as output:
-    writer = csv.writer(output)
-    writer.writerow(["", "", "", "", "", f"---------- Test initiated at {datetime.datetime.now()} ----------"])
+all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 
-tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
+all_results = {
+    "latency_tests": [],
+    "throughput_tests": [],
+    "jitter_tests": []
+}
 
-for test in tests:
+for test in all_tests:
     test_type = test['test_type']
-    logger.debug(f"Test type: {test_type} will be run.")
-    if test_type == "ping":
-        results = run_ping_test(test)
-    elif test_type == "throughput":
-        results = ""  # temporary code
-        pass
-    elif test_type == "jitter":
-        results = ""  # temporary code
-        pass
-    else:
-        logger.error(f"Unknown test type: {test_type}. Skipping test.")
+    if test_type not in TEST_TYPES:     # see constant that is defined at top of code just after imports
+        logger.error(f"Unknown test type '{test_type}' for test {test['id_number']}. Skipping test.")
         continue
+    else:
+        logger.debug(f"Test type: {test_type} will be run.")
+        results = run_test(test)
 
-    with open(output_csv, 'a') as output:
-        writer = csv.writer(output)
-        writer.writerow(results)
+        # Append the results to the appropriate list in all_results
+        key_name = test_type + "_tests"
+        all_results[key_name].append(results)
 
-logger.info(f"Test ended at {datetime.datetime.now()}")
+
+# Write the results to a JSON file
+with open(output_file, 'w') as json_file:
+    json.dump(all_results, json_file, indent=4)
+
+logger.info(f"Tests ended at {datetime.datetime.now()}")
