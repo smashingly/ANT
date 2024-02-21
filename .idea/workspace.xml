@@ -4,12 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed.">
-      <change beforePath="$PROJECT_DIR$/.idea/csv-editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/002_new_format.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/002_new_format.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/003_new_new.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/003_new_new.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -124,7 +121,15 @@
       <option name="project" value="LOCAL" />
       <updated>1708325510915</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring.">
+      <option name="closed" value="true" />
+      <created>1708416428854</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1708416428854</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -143,6 +148,7 @@
     <MESSAGE value="Fixed bug that failed to clean out &quot; ms&quot; at end of stddev RTT in CSV output" />
     <MESSAGE value="Refactored numerous internals - same functionality as previous commit, except now we have Pythong logging module." />
     <MESSAGE value="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed." />
-    <option name="LAST_COMMIT_MESSAGE" value="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed." />
+    <MESSAGE value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
+    <option name="LAST_COMMIT_MESSAGE" value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
   </component>
 </project>

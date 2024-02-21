@@ -10,20 +10,11 @@ TEST_TYPES = ["latency", "throughput", "jitter"]
 
 
 def parse_ping_results(test_data: dict):
-
     id_number = test_data['id_number']
     test_command = test_data['test_command']
     raw_output = test_data['raw_output']
 
     result_rtt_text = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
-
-    # Log output to the screen and to logfile - we'll convert this later to use the logging module
-    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
-    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
-    #  want to change the console logging level away from ERROR. We can change this later.
-    msg = f"Test {id_number}: Success. Result: {result_rtt_text}"
-    print(msg)
-    logger.info(msg)
 
     # Parse out the actual ping statistics from the relevant line in the output. Split at "="
     # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
@@ -31,6 +22,18 @@ def parse_ping_results(test_data: dict):
 
     # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
     min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
+
+    # Log output to the screen and to logfile. We do this in each specific parse function because we have easy access
+    #  to the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
+    #  We could do this in run_test() but we'd need a block of if-logic that figures out the test type then extracts
+    #  the necessary key/value data from the results dict, then generates the appropriate message.
+    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
+    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
+    #  want to change the console logging level away from ERROR. We can change this later.
+    short_form_results = f"{min_rtt}/{avg_rtt}/{max_rtt}/{stddev_rtt}"
+    msg = f"Test {id_number}: Success. Result: {short_form_results} ms (min/avg/max/mdev-or-stddev)"
+    print(msg)
+    logger.info(msg)
 
     return {
         "id_number": id_number,
@@ -43,7 +46,6 @@ def parse_ping_results(test_data: dict):
         "stddev_rtt": stddev_rtt,
         "test_command": test_command
     }
-    # return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
 
 
 def parse_iperf_results(test_data: dict):
@@ -59,7 +61,7 @@ def parse_iperf_results(test_data: dict):
     command_result = json.loads(raw_output)
 
     if test_type == "throughput":
-        return {
+        parsed_results = {
             "id_number": id_number,
             "timestamp": str(test_data['timestamp']),
             "source": test_data['test_params']['source'],
@@ -69,8 +71,10 @@ def parse_iperf_results(test_data: dict):
             "bits_per_second": command_result['end']['sum_sent']['bits_per_second'],
             "test_command": test_command
         }
+        short_form_results = f"{parsed_results['seconds']} seconds; {parsed_results['bytes']} bytes; " \
+                             f"{parsed_results['bits_per_second']} bits/sec"
     elif test_type == "jitter":
-        return {
+        parsed_results = {
             "id_number": id_number,
             "timestamp": str(test_data['timestamp']),
             "source": test_data['test_params']['source'],
@@ -80,6 +84,21 @@ def parse_iperf_results(test_data: dict):
             "lost_packets": command_result['end']['sum']['lost_packets'],
             "test_command": test_command
         }
+        short_form_results = f"{parsed_results['jitter_ms']} ms jitter; {parsed_results['packets']} packets; " \
+                                f"{parsed_results['lost_packets']} lost"
+    else:
+        raise ValueError(f"Invalid test type '{test_type}' passed for test {id_number}.")
+
+    # Log output to the screen and to logfile. We do this in each specific parse function so that we have access to
+    #  the variables for that specific test type. This allows us to output short-form results in a one-line log entry.
+    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
+    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
+    #  want to change the console logging level away from ERROR. We can change this later.
+    msg = f"Test {id_number}: Success. Results: {short_form_results}"
+    print(msg)
+    logger.info(msg)
+
+    return parsed_results
 
 
 def parse_results(id_number, timestamp, test_params, test_command, raw_output):
@@ -147,9 +166,8 @@ def run_test(test_params: dict):
     logger.info(f"{timestamp}  Test #{id_number} initiated. Running command: {test_command}")
 
     try:
-        # Execute the command and get the result
+        # Execute the command and get the result.
         raw_output = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
-        print(f"Raw output type: {type(raw_output)}.  Raw output:\n {raw_output}")
 
     except subprocess.CalledProcessError as e:
         t_stamp = datetime.datetime.now()
@@ -164,10 +182,10 @@ def run_test(test_params: dict):
         min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
         return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
 
-    else:   # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
+    else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
         print(f"Trying to parse results for test {id_number} now...")
         p_results = parse_results(id_number=id_number, timestamp=timestamp, test_params=test_params,
-                             test_command=test_command, raw_output=raw_output)
+                                  test_command=test_command, raw_output=raw_output)
         print(f"Parsed results: {p_results}")
         return p_results
 
@@ -214,7 +232,7 @@ out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 # TODO: This approach creates new files upon each program run, to avoid overwriting previous results. But over time
 #  it will result in a lot of files, so we may want to add log file rotation, to manage log files better. E.g.,
 #  keep the last 28 days worth of logs, and delete any old ones.
-log_file = os.path.join(output_dir, f"{base_name}.log")     # FIXME: temporarily changed it to basename while debugging
+log_file = os.path.join(output_dir, f"{base_name}.log")  # FIXME: temporarily changed it to basename while debugging
 output_file = os.path.join(output_dir, f"{out_basename}.json")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
 #  a certain age, to avoid filling up the disk with old files.
@@ -252,9 +270,16 @@ all_results = {
     "jitter_tests": []
 }
 
+# TODO: Add feature which iterates over all_tests and makes a list of unique source hosts; then iterate through those
+#  hosts, checking with shutil.which to ensure that iperf3 is installed. It would need to have the same code that checks
+#  "is this host = me? (ie. localhost)" to know if it's excuting the shutil.which locally, or remotely via SSH.
+#  Instead of hard-coding "iperf3" as what we're confirming, we would have a constant defined at the top of the code
+#  "REQUIRED_TOOLS" or something, and we would iterate over that. We only need iperf3 at present but using a constant
+#  makes it easier to add other test tools in future.
+
 for test in all_tests:
     test_type = test['test_type']
-    if test_type not in TEST_TYPES:     # see constant that is defined at top of code just after imports
+    if test_type not in TEST_TYPES:  # see constant that is defined at top of code just after imports
         logger.error(f"Unknown test type '{test_type}' for test {test['id_number']}. Skipping test.")
         continue
     else:
@@ -264,7 +289,6 @@ for test in all_tests:
         # Append the results to the appropriate list in all_results
         key_name = test_type + "_tests"
         all_results[key_name].append(results)
-
 
 # Write the results to a JSON file
 with open(output_file, 'w') as json_file:
