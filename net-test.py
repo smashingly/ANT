@@ -1,3 +1,15 @@
+# TODO: issue to resolve: hardcoding of username needs to be fixed. Recommend creating a separate CSV or text
+#  config file for correlating hostnames (that appear in the input CSV) with usernames. OR, we need to go one further
+#  and specify an auth method, because for OCI we only use a key that's supplied by Phil, so the SSH command is
+#  different - we have to specify -i oci-vm.key in our SSH command. Whereas for the other clouds we just installed
+#  our own public key on the VMs, as they support password auth, so ssh-copy-id was easy to use.  For OCi we must've
+#  manually copied the edats003 public key file to the OCI VMs, then manually added it to authorized_keys.
+
+# TODO: update the "Success" messaging so that it includes something like {source} -> {dest} in the message.
+
+
+
+
 import json
 import subprocess
 import csv
@@ -8,12 +20,15 @@ import sys
 import socket
 
 TEST_TYPES = ["latency", "throughput", "jitter"]
+USERNAME = "ash"
 
 
 def parse_ping_results(test_data: dict):
     id_number = test_data['id_number']
     test_command = test_data['test_command']
     raw_output = test_data['raw_output']
+    source = test_data['test_params']['source']
+    dest = test_data['test_params']['destination']
 
     # Isolate out the line in the ping output that contains the summary results
     rtt_line = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
@@ -25,32 +40,44 @@ def parse_ping_results(test_data: dict):
     # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by the '/'
     min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
 
+    # TODO: consider whether this whole detection of tx/rx packets is a bit prone to breaking. If we do keep it,
+    #  then we want to at least make sure that when it breaks, it breaks in a graceful way, ie. exception handling.
+    #  We can simulate this with some hard-coded dummy responses that don't make sense, and figure out what kinds of
+    #  exceptions get thrown, and write handlers to handle them.
     # Isolate out the line that contains the packet loss data. Note: there's only one line that matches this, but
     # because we're using a list comprehension (in square brackets) we will get a list with one item in it.
-    loss_line = [line for line in raw_output.split('\n') if 'packet loss' in line]
 
-    # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work for
-    # MacOS and most Linux, but won't work on Windows as it has vastly different wording.
-    # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
-    # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
+    # If we're running on Windows, then skip the parsing of packet loss info and just populate the fields with None.
+    if os.name == 'nt':
+        logger.info(f"Test ID {id_number}: Running on Windows, so packet loss will not be analysed for ping command.")
+        packets_transmitted = None
+        packets_received = None
+        packet_loss_percent = None
+        success_msg_suffix = f"packet loss not analysed for Windows ping command."
+    else:
+        # Create a list of any lines in the output that have 'packet loss' in them.
+        loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
 
-    split_line = loss_line[0].split(', ')    # ['10 packets transmitted', '10 packets received', etc...]
-    packets_transmitted = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
-    packets_received = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
-    # it's too hard to parse this out of the string, so let's calculate the loss percentage ourselves:
-    packet_loss_percent = round(((packets_transmitted - packets_received) / packets_transmitted) * 100, 4)
+        # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work for
+        # MacOS and most Linux, but won't work on Windows as it uses different wording and symbols.
+        # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
+        # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
+        loss_line = loss_lines[0]
+        split_line = loss_line.split(', ')    # ['10 packets transmitted', '10 packets received', etc...]
+        packets_transmitted = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
+        packets_received = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
+        # it's too hard to parse this out of the string, so let's calculate the loss percentage ourselves:
+        packet_loss_percent = round(((packets_transmitted - packets_received) / packets_transmitted) * 100, 4)
+        success_msg_suffix = f"{packets_transmitted} / {packets_received} / {packet_loss_percent}%  (#tx/#rx/loss)"
 
     # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
     #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
     #  We could do this in run_test() but we'd need a block of if-logic that works out the test type then extracts
     #  the necessary key/value data from the results dict, then generates the appropriate message.
     # Note: we're using a separate print() statement because the logger will only display console messages if they're
-    #  at ERROR or above severity level, and it's inappropriate to log success using an ERROR level. And we do not
-    #  want to change the console logging level to INFO as this would flood the user with a lot of unnecessary info.
-    short_results = f""
-    success_msg = (f"Test ID {id_number}: Success. Result: "
-                   f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), "
-                   f"{packets_transmitted} / {packets_received} / {packet_loss_percent}%  (#tx/#rx/%loss)")
+    #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
+    success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: "
+                   f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), " + success_msg_suffix)
     print(success_msg)
     logger.info(success_msg)
 
@@ -156,7 +183,7 @@ def run_test(test_params: dict):
     source = test_params.get('source', 'localhost')  # if value was missing from CSV, assume 'localhost'
     destination = test_params['destination']  # required field
     # TODO: come up with a better way to handle the username. Probably need a separate config file with hosts/accounts
-    username = "ash"  # temporarily hard-code this for now
+    username = USERNAME  # temporarily hard-code this for now
 
     if test_params['test_type'] == "latency":
         size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
@@ -228,8 +255,6 @@ def read_input_file(filename):
 
         # Construct a dictionary from the row's data, converting empty CSV values to None.
         for row in reader:
-            print(row)
-            print(type(row))
             if row[0].startswith("#"):
                 # Skip rows starting with a hash character, but log this to the screen and to the logfile.
                 logger.warning(f"Skipping row in input file starting with a '#' character: {row}")

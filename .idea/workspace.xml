@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Moved hostname/FQDN lookup to one-off at start of code. Improved logging.">
-      <change beforePath="$PROJECT_DIR$/tests/tests-msd.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests-msd.csv" afterDir="false" />
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Fixed wrong data in the two example test input CSVs">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -145,7 +146,15 @@
       <option name="project" value="LOCAL" />
       <updated>1708572715947</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Fixed wrong data in the two example test input CSVs">
+      <option name="closed" value="true" />
+      <created>1708573274569</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1708573274569</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -167,6 +176,7 @@
     <MESSAGE value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
     <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
     <MESSAGE value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
-    <option name="LAST_COMMIT_MESSAGE" value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
+    <MESSAGE value="Fixed wrong data in the two example test input CSVs" />
+    <option name="LAST_COMMIT_MESSAGE" value="Fixed wrong data in the two example test input CSVs" />
   </component>
 </project>
