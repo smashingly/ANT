@@ -1,6 +1,0 @@
-#id_number,test_type,source,destination,count,size
-1,latency,localhost,8.8.8.8,10,56
-2,latency,localhost,raspberrypi,10,
-3,latency,raspberrypi,192.168.0.1,,
-4,throughput,localhost,raspberrypi,,50M
-5,jitter,localhost,raspberrypi,,

@@ -5,6 +5,7 @@ import os
 import datetime
 import logging
 import sys
+import socket
 
 TEST_TYPES = ["latency", "throughput", "jitter"]
 
@@ -14,26 +15,44 @@ def parse_ping_results(test_data: dict):
     test_command = test_data['test_command']
     raw_output = test_data['raw_output']
 
-    result_rtt_text = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
+    # Isolate out the line in the ping output that contains the summary results
+    rtt_line = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
 
-    # Parse out the actual ping statistics from the relevant line in the output. Split at "="
+    # Keep the text between (but excluding) " = " and " ms"
     # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
-    rtt_data = result_rtt_text[0].replace(" ms", "").split('=')[1].strip()
+    rtt_data = rtt_line[0].replace(" ms", "").split('=')[1].strip()
 
-    # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we will now split it by the '/'
+    # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by the '/'
     min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
 
-    # Log output to the screen and to logfile. We do this in each specific parse function because we have easy access
-    #  to the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
-    #  We could do this in run_test() but we'd need a block of if-logic that figures out the test type then extracts
+    # Isolate out the line that contains the packet loss data. Note: there's only one line that matches this, but
+    # because we're using a list comprehension (in square brackets) we will get a list with one item in it.
+    loss_line = [line for line in raw_output.split('\n') if 'packet loss' in line]
+
+    # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work for
+    # MacOS and most Linux, but won't work on Windows as it has vastly different wording.
+    # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
+    # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
+
+    split_line = loss_line[0].split(', ')    # ['10 packets transmitted', '10 packets received', etc...]
+    packets_transmitted = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
+    packets_received = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
+    # it's too hard to parse this out of the string, so let's calculate the loss percentage ourselves:
+    packet_loss_percent = round(((packets_transmitted - packets_received) / packets_transmitted) * 100, 4)
+
+    # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
+    #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
+    #  We could do this in run_test() but we'd need a block of if-logic that works out the test type then extracts
     #  the necessary key/value data from the results dict, then generates the appropriate message.
-    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
-    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
-    #  want to change the console logging level away from ERROR. We can change this later.
-    short_form_results = f"{min_rtt}/{avg_rtt}/{max_rtt}/{stddev_rtt}"
-    msg = f"Test {id_number}: Success. Result: {short_form_results} ms (min/avg/max/mdev-or-stddev)"
-    print(msg)
-    logger.info(msg)
+    # Note: we're using a separate print() statement because the logger will only display console messages if they're
+    #  at ERROR or above severity level, and it's inappropriate to log success using an ERROR level. And we do not
+    #  want to change the console logging level to INFO as this would flood the user with a lot of unnecessary info.
+    short_results = f""
+    success_msg = (f"Test ID {id_number}: Success. Result: "
+                   f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), "
+                   f"{packets_transmitted} / {packets_received} / {packet_loss_percent}%  (#tx/#rx/%loss)")
+    print(success_msg)
+    logger.info(success_msg)
 
     return {
         "id_number": id_number,
@@ -44,6 +63,9 @@ def parse_ping_results(test_data: dict):
         "avg_rtt": avg_rtt,
         "max_rtt": max_rtt,
         "stddev_rtt": stddev_rtt,
+        "packets_transmitted": packets_transmitted,
+        "packets_received": packets_received,
+        "packet_loss_percent": packet_loss_percent,
         "test_command": test_command
     }
 
@@ -91,10 +113,9 @@ def parse_iperf_results(test_data: dict):
 
     # Log output to the screen and to logfile. We do this in each specific parse function so that we have access to
     #  the variables for that specific test type. This allows us to output short-form results in a one-line log entry.
-    # TODO: we're leaving the separate print() statement here for now, because the logger will only display
-    #  messages at ERROR level or above, so we won't see INFO level messages on the console (screen). And we do not
-    #  want to change the console logging level away from ERROR. We can change this later.
-    msg = f"Test {id_number}: Success. Results: {short_form_results}"
+    #  NOTE: We use a separate print() statement for the console output, because the logger will only display console
+    #  messages at WARNING level or above, so we can't use one logger.info() call to convey success to the console.
+    msg = f"Test ID {id_number}: Success. Result: {short_form_results}"
     print(msg)
     logger.info(msg)
 
@@ -121,10 +142,10 @@ def parse_results(id_number, timestamp, test_params, test_command, raw_output):
 
 def run_test(test_params: dict):
     """
-    Run a ping test based on the parameters in the input dictionary. The dictionary should contain the following keys:
+    Run a test based on the parameters in the input dictionary. The dictionary should contain the following keys:
     - id_number: a unique identifier for the test. Mandatory.
     - source: the source IP or hostname for the test. Used for constructing the test command (ie. local or SSH).
-    Default is 'localhost'
+    Default is 'localhost' if not supplied.
     - destination: the destination IP or hostname for the test. Mandatory.
     - count: the number of pings to send (optional; default 10)
     - size: the size of the ping packet (optional; default 56 bytes)
@@ -158,35 +179,39 @@ def run_test(test_params: dict):
         logger.error(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
         raise ValueError(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
 
-    # If it's a test to execute remotely then we need to construct an SSH command to run the test on the remote host
-    if source not in ["localhost", "127.0.0.1"]:
+    # Get the current machine's hostname, FQDN and name-lookup the IP from the hostname. The user should not ever be
+    #  putting an IP address into the 'source' field, but in case they do, we'll try to handle it gracefully. Also
+    #  note that on some systems (particularly home networks) gethostname() will include ".local" or ".gateway".
+    if source in [my_hostname, my_fqdn, my_ip_addr, "localhost", "127.0.0.1"]:
+        # Run the test locally - do nothing, just log the answer
+        logger.info(f"Test ID {id_number} source '{source}' matches local machine details. Test will be run locally.")
+    else:
+        logger.info(f"Test ID {id_number} source '{source}' does not match local machine. Constructing SSH remote command.")
         test_command = f"ssh -n -o ConnectTimeout=2 {username}@{source} '{test_command}'"
 
+    # this timestamp records the test start time, so we grab it here just before the test is executed
     timestamp = datetime.datetime.now()
-    logger.info(f"{timestamp}  Test #{id_number} initiated. Running command: {test_command}")
+    logger.info(f"Test ID {id_number} initiated. Running command: {test_command}")
 
     try:
         # Execute the command and get the result.
         raw_output = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
 
     except subprocess.CalledProcessError as e:
-        t_stamp = datetime.datetime.now()
-        logger.error(f"***************************************************************************************")
-        logger.error(f"{t_stamp}  Test #{id_number} (command '{test_command}') failed. Full output of test:")
-        logger.error(e.output.decode())
-        logger.error(f"***************************************************************************************")
+        logger.error(f"Test failure for test ID {id_number} (command '{test_command}'). "
+                     f"Full output of test: {e.output.decode()}")
 
         # TODO: Fix this, this is the old code for dealing with ping failures. Need to genericise it so that it can
         #  handle any test type gracefully.
+        return None
         # If something failed in the command, we'll set the RTT values to None
-        min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
-        return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
+        # min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
+        # return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
 
     else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
-        print(f"Trying to parse results for test {id_number} now...")
         p_results = parse_results(id_number=id_number, timestamp=timestamp, test_params=test_params,
                                   test_command=test_command, raw_output=raw_output)
-        print(f"Parsed results: {p_results}")
+        logger.debug(f"Test ID {id_number} parsed results: {p_results}")
         return p_results
 
 
@@ -203,11 +228,18 @@ def read_input_file(filename):
 
         # Construct a dictionary from the row's data, converting empty CSV values to None.
         for row in reader:
-            row_dict = {header[i]: value if value != "" else None for i, value in enumerate(row)}
-            # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
-            #  assign default values to missing test command parameters in the test-running function(s).
-            row_dict = {k: v for k, v in row_dict.items() if v is not None}
-            data.append(row_dict)
+            print(row)
+            print(type(row))
+            if row[0].startswith("#"):
+                # Skip rows starting with a hash character, but log this to the screen and to the logfile.
+                logger.warning(f"Skipping row in input file starting with a '#' character: {row}")
+                continue
+            else:
+                row_dict = {header[i]: value if value != "" else None for i, value in enumerate(row)}
+                # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
+                #  assign default values to missing test command parameters in the test-running function(s).
+                row_dict = {k: v for k, v in row_dict.items() if v is not None}
+                data.append(row_dict)
 
     return data
 
@@ -239,12 +271,12 @@ output_file = os.path.join(output_dir, f"{out_basename}.json")
 
 """######################### Start of logger setup and configuration #########################"""
 logger = logging.getLogger("ant")  # Create a custom logger - "ant" is an arbitrary name
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)  # set to logging.DEBUG for additional output during development
 
 # Create handlers. Naming convention: c = console, f = file
 c_handler = logging.StreamHandler()
 f_handler = logging.FileHandler(log_file)
-c_handler.setLevel(logging.ERROR)  # determines the error-level (or above) that will be sent to console
+c_handler.setLevel(logging.WARNING)  # determines the error-level (or above) that will be sent to console
 f_handler.setLevel(logging.DEBUG)  # determines the error-level (or above) that will be sent to file
 
 # Create formatters and add it to handlers
@@ -259,11 +291,25 @@ logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 """######################### End of logger setup and configuration #########################"""
 
-logger.info("*" * 20 + f" Initial startup at: {datetime.datetime.now()} " + "*" * 20)
-logger.info(f"Input CSV file: {input_csv}")
+logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
+logger.info(f"Input CSV file: {input_csv}. Output file: {output_file}")
 
+# Get the local machine's hostname, FQDN and IP address. This is used in the test-run loop to determine if the test
+#  should be run locally or via SSH. We also use this to log the local machine's details at the start of the script.
+logger.debug("Getting local machine's hostname, FQDN and IP address.")
+my_hostname = socket.gethostname().lower().split('.')[0]  # Extract the part before the first dot
+my_fqdn = socket.getfqdn().lower()
+my_ip_addr = socket.gethostbyname(my_hostname)
+
+# The wording of this log entry is carefully chosen, to make it clear that the my_ip_addr is not pulled from
+#  the NIC or OS, it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
+logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_hostname} to {my_ip_addr}.")
+
+logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
+logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
+# initialise the all_results dictionary with its high-level keys - these are lists of results of a given test type
 all_results = {
     "latency_tests": [],
     "throughput_tests": [],
@@ -277,13 +323,17 @@ all_results = {
 #  "REQUIRED_TOOLS" or something, and we would iterate over that. We only need iperf3 at present but using a constant
 #  makes it easier to add other test tools in future.
 
+# Do the actual work - iterate over all tests and run them
 for test in all_tests:
+    id_number = test['id_number']
     test_type = test['test_type']
-    if test_type not in TEST_TYPES:  # see constant that is defined at top of code just after imports
-        logger.error(f"Unknown test type '{test_type}' for test {test['id_number']}. Skipping test.")
+
+    # Check test_type's validity (see constant, declared just after the import statements)
+    if test_type not in TEST_TYPES:
+        logger.warning(f"Unknown test type '{test_type}' for test {id_number}. Skipping test.")
         continue
     else:
-        logger.debug(f"Test type: {test_type} will be run.")
+        logger.debug(f"Test ID {id_number} of type {test_type} will be run.")
         results = run_test(test)
 
         # Append the results to the appropriate list in all_results
@@ -294,4 +344,4 @@ for test in all_tests:
 with open(output_file, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
-logger.info(f"Tests ended at {datetime.datetime.now()}")
+logger.info(f"{'*' * 20} End of script execution {'*' * 20}")

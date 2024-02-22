@@ -1,0 +1,6 @@
+#id_number,test_type,source,destination,count,size
+1,latency,localhost,oci-syd-vm,5,56
+2,latency,localhost,oci-mel-vm,20,
+3,latency,oci-syd-vm,edats003,,
+4,throughput,localhost,oci-syd-vm,,50M
+5,jitter,localhost,oci-syd-vm,,
