@@ -351,35 +351,30 @@ logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
-# Extract all unique hostnames from all_tests, and check if they're in the host_config file.
+# Extract all unique hostnames from all_tests
 unique_hostnames = set()       # Using a set automatically prevents duplicates
 for test in all_tests:
     unique_hostnames.add(test['source'])
 
+# Make a list of all hostnames in the host_config file
+all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
+
 # Check if each unique hostname in all_tests is in the host_config file. If not, log an error and halt execution.
-missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in host_config.sections()]
+missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
 if missing_hostnames:
-    logger.error(f"Missing hostnames in config.ini: {missing_hostnames}")
+    logger.critical(f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
     exit(1)  # Halt execution with error code (non-zero)
 else:
-    logger.info(f"All hostnames in input file are present in {host_config_file}.")
+    logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
 
-
-# initialise the all_results dictionary with its high-level keys - these are lists of results of a given test type
+# initialise the all_results dictionary with its high-level keys
 all_results = {
     "latency_tests": [],
     "throughput_tests": [],
     "jitter_tests": []
 }
 
-# TODO: Add feature which iterates over all_tests and makes a list of unique source hosts; then iterate through those
-#  hosts, checking with shutil.which to ensure that iperf3 is installed. It would need to have the same code that checks
-#  "is this host = me? (ie. localhost)" to know if it's excuting the shutil.which locally, or remotely via SSH.
-#  Instead of hard-coding "iperf3" as what we're confirming, we would have a constant defined at the top of the code
-#  "REQUIRED_TOOLS" or something, and we would iterate over that. We only need iperf3 at present but using a constant
-#  makes it easier to add other test tools in future.
-
-# Do the actual work - iterate over all tests and run them
+# Do the actual work - iterate over all_tests and run each
 for test in all_tests:
     id_number = test['id_number']
     test_type = test['test_type']
@@ -399,6 +394,7 @@ for test in all_tests:
             all_results[key_name].append(results)
 
 # Write the results to a JSON file
+logger.info(f"All tests have been iterated over. Writing results to {output_file}.")
 with open(output_file, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
