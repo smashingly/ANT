@@ -4,7 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Fixed wrong data in the two example test input CSVs">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results.">
+      <change afterPath="$PROJECT_DIR$/host_config.ini" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
@@ -154,7 +155,15 @@
       <option name="project" value="LOCAL" />
       <updated>1708573274569</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results.">
+      <option name="closed" value="true" />
+      <created>1708643329911</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1708643329911</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -177,6 +186,7 @@
     <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
     <MESSAGE value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
     <MESSAGE value="Fixed wrong data in the two example test input CSVs" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fixed wrong data in the two example test input CSVs" />
+    <MESSAGE value="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results." />
   </component>
 </project>

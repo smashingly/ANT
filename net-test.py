@@ -1,14 +1,3 @@
-# TODO: issue to resolve: hardcoding of username needs to be fixed. Recommend creating a separate CSV or text
-#  config file for correlating hostnames (that appear in the input CSV) with usernames. OR, we need to go one further
-#  and specify an auth method, because for OCI we only use a key that's supplied by Phil, so the SSH command is
-#  different - we have to specify -i oci-vm.key in our SSH command. Whereas for the other clouds we just installed
-#  our own public key on the VMs, as they support password auth, so ssh-copy-id was easy to use.  For OCi we must've
-#  manually copied the edats003 public key file to the OCI VMs, then manually added it to authorized_keys.
-
-# TODO: update the "Success" messaging so that it includes something like {source} -> {dest} in the message.
-
-
-
 
 import json
 import subprocess
@@ -18,68 +7,89 @@ import datetime
 import logging
 import sys
 import socket
+import argparse
+import configparser
 
-TEST_TYPES = ["latency", "throughput", "jitter"]
-USERNAME = "ash"
+TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
 
 
 def parse_ping_results(test_data: dict):
+    # This function parses the results of a ping test. It takes a dictionary as input, containing the following
+    # keys: id_number, timestamp, test_params, test_command, and raw_output. It returns a dictionary containing the
+    # parsed results, or None if the parsing fails.
     id_number = test_data['id_number']
     test_command = test_data['test_command']
     raw_output = test_data['raw_output']
     source = test_data['test_params']['source']
     dest = test_data['test_params']['destination']
 
+    # We set these values to None so that any of the If statements that check for invalid ping result text can just
+    #  do nothing (other than log an error message). This saves repeating the same 2 lines of code in the If statements
+    #  that detect: A) no min/avg/max line; B) >1 min/avg/max line; and C) running on Windows OS.
+    min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
+    packets_txd, packets_rxd, packet_loss_percent = None, None, None
+
+    # DEBUG CODE FOR TEST-BREAKING THE PING PARSER
+    # raw_output = "min/avg/max\nmin/avg/max\nMultiple occurrences of min/avg/max/mdev"
+    # raw_output = "Hello there\nThis is a test\nThere is no occurrence of min, avg, max etc"
+
     # Isolate out the line in the ping output that contains the summary results
     rtt_line = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
 
-    # Keep the text between (but excluding) " = " and " ms"
-    # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
-    rtt_data = rtt_line[0].replace(" ms", "").split('=')[1].strip()
-
-    # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by the '/'
-    min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
-
-    # TODO: consider whether this whole detection of tx/rx packets is a bit prone to breaking. If we do keep it,
-    #  then we want to at least make sure that when it breaks, it breaks in a graceful way, ie. exception handling.
-    #  We can simulate this with some hard-coded dummy responses that don't make sense, and figure out what kinds of
-    #  exceptions get thrown, and write handlers to handle them.
-    # Isolate out the line that contains the packet loss data. Note: there's only one line that matches this, but
-    # because we're using a list comprehension (in square brackets) we will get a list with one item in it.
-
-    # If we're running on Windows, then skip the parsing of packet loss info and just populate the fields with None.
-    if os.name == 'nt':
-        logger.info(f"Test ID {id_number}: Running on Windows, so packet loss will not be analysed for ping command.")
-        packets_transmitted = None
-        packets_received = None
-        packet_loss_percent = None
-        success_msg_suffix = f"packet loss not analysed for Windows ping command."
+    # Ensure that if raw_output has 0, or >1 lines containing 'min/avg/max', then we handle it gracefully. We log
+    #  something, then do nothing else, because we've already set all the test result variables to None.
+    if len(rtt_line) == 0:
+        logger.error(f"Test ID {id_number}: No line found in ping output containing 'min/avg/max'. Skipping test. "
+                     f"Full output of test:\n{raw_output}")
+    elif len(rtt_line) > 1:     # This situation is extremely unlikely
+        logger.error(f"Test ID {id_number}: Multiple lines found in ping output containing 'min/avg/max'. Skipping "
+                     f"test. Full output of test:\n{raw_output}")
     else:
-        # Create a list of any lines in the output that have 'packet loss' in them.
-        loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
+        # Keep the text between (but excluding) " = " and " ms"
+        # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
+        rtt_data = rtt_line[0].replace(" ms", "").split('=')[1].strip()
 
-        # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work for
-        # MacOS and most Linux, but won't work on Windows as it uses different wording and symbols.
-        # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
-        # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
-        loss_line = loss_lines[0]
-        split_line = loss_line.split(', ')    # ['10 packets transmitted', '10 packets received', etc...]
-        packets_transmitted = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
-        packets_received = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
-        # it's too hard to parse this out of the string, so let's calculate the loss percentage ourselves:
-        packet_loss_percent = round(((packets_transmitted - packets_received) / packets_transmitted) * 100, 4)
-        success_msg_suffix = f"{packets_transmitted} / {packets_received} / {packet_loss_percent}%  (#tx/#rx/loss)"
+        # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by the '/'
+        min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
 
-    # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
-    #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
-    #  We could do this in run_test() but we'd need a block of if-logic that works out the test type then extracts
-    #  the necessary key/value data from the results dict, then generates the appropriate message.
-    # Note: we're using a separate print() statement because the logger will only display console messages if they're
-    #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
-    success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: "
-                   f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), " + success_msg_suffix)
-    print(success_msg)
-    logger.info(success_msg)
+
+        # TODO: this isn't really effective; we need to check if the OS of the machine RUNNING THE TEST is Windows.
+        #  Either ditch this 'if' clause, or implement parsing of Windows-style pings (better approach).
+        if os.name == 'nt':         # Skip detection if this script is running on a Windows machine.
+            logger.info(f"Test ID {id_number}: Running on Windows; packet count & loss not analysed.")
+            success_msg_suffix = f"packet count & loss not analysed (running on Windows)."
+        else:
+            # Create a list of any lines in the output that have 'packet loss' in them. There should only be one.
+            loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
+            if len(loss_lines) == 0:
+                logger.error(f"Test ID {id_number}: No line found in ping output containing 'packet loss'. Will record "
+                             f"RTT results but not tx/rx/lost packets. Full output of test:\n{raw_output}")
+                success_msg_suffix = f"packet count data not found in ping output."
+            else:
+                # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work
+                # for MacOS and most Linux, but won't work on Windows as it uses different wording and symbols.
+                # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
+                # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
+                loss_line = loss_lines[0]
+                split_line = loss_line.split(', ')       # ['10 packets transmitted', '10 packets received', etc...]
+                packets_txd = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
+                packets_rxd = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
+
+                # It's hard to reliably parse loss% out of the string because some Linux OSes use slightly different
+                # wording, or insert "+1 duplicates" in the middle of the string. So we calculate the loss ourselves.
+                packet_loss_percent = round(((packets_txd - packets_rxd) / packets_txd) * 100, 4)
+                success_msg_suffix = f"{packets_txd} / {packets_rxd} / {packet_loss_percent}%  (#tx/#rx/loss)"
+
+        # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
+        #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
+        #  We could do this in run_test() but we'd need a block of if-logic that works out the test type then extracts
+        #  the necessary key/value data from the results dict, then generates the appropriate message.
+        # Note: we're using a separate print() statement because the logger will only display console messages if they're
+        #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
+        success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: "
+                       f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), " + success_msg_suffix)
+        print(success_msg)
+        logger.info(success_msg)
 
     return {
         "id_number": id_number,
@@ -90,8 +100,8 @@ def parse_ping_results(test_data: dict):
         "avg_rtt": avg_rtt,
         "max_rtt": max_rtt,
         "stddev_rtt": stddev_rtt,
-        "packets_transmitted": packets_transmitted,
-        "packets_received": packets_received,
+        "packets_txd": packets_txd,
+        "packets_rxd": packets_rxd,
         "packet_loss_percent": packet_loss_percent,
         "test_command": test_command
     }
@@ -108,6 +118,9 @@ def parse_iperf_results(test_data: dict):
 
     # Convert the JSON string to a Python dictionary
     command_result = json.loads(raw_output)
+
+    # TODO: ponder what could go wrong here, and think about error-handling / exception-handling. What if the
+    #  JSON is malformed? What if the JSON is missing the expected keys?
 
     if test_type == "throughput":
         parsed_results = {
@@ -182,8 +195,7 @@ def run_test(test_params: dict):
     id_number = test_params['id_number']  # this is a required field, so we can assume it's present
     source = test_params.get('source', 'localhost')  # if value was missing from CSV, assume 'localhost'
     destination = test_params['destination']  # required field
-    # TODO: come up with a better way to handle the username. Probably need a separate config file with hosts/accounts
-    username = USERNAME  # temporarily hard-code this for now
+    username = host_config.get(source, 'username')  # get this host's username from the host_config file
 
     if test_params['test_type'] == "latency":
         size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
@@ -227,13 +239,7 @@ def run_test(test_params: dict):
     except subprocess.CalledProcessError as e:
         logger.error(f"Test failure for test ID {id_number} (command '{test_command}'). "
                      f"Full output of test: {e.output.decode()}")
-
-        # TODO: Fix this, this is the old code for dealing with ping failures. Need to genericise it so that it can
-        #  handle any test type gracefully.
         return None
-        # If something failed in the command, we'll set the RTT values to None
-        # min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
-        # return [id_number, min_rtt, avg_rtt, max_rtt, stddev_rtt, test_command]
 
     else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
         p_results = parse_results(id_number=id_number, timestamp=timestamp, test_params=test_params,
@@ -249,11 +255,11 @@ def read_input_file(filename):
 
     with open(filename, 'r') as input_file:
         reader = csv.reader(input_file)
-        header = next(reader)
-        header = [h.lstrip('#') for h in header]
+        header = next(reader)                       # grab the first row of file (the header row)
+        header = [h.lstrip('#') for h in header]    # remove any leading '#' characters found in header fields
         data = []
 
-        # Construct a dictionary from the row's data, converting empty CSV values to None.
+        # Construct a dictionary from the remaining reader rows, converting empty CSV values to None.
         for row in reader:
             if row[0].startswith("#"):
                 # Skip rows starting with a hash character, but log this to the screen and to the logfile.
@@ -269,16 +275,21 @@ def read_input_file(filename):
     return data
 
 
-if len(sys.argv) < 2:
-    print("\nError: No input CSV file specified.")
-    print(f"Usage:  python3 {sys.argv[0]} input_csv_file [output_directory]\n")
-    sys.exit(1)
-elif len(sys.argv) == 3:
-    input_csv = sys.argv[1]
-    output_dir = sys.argv[2]
-else:
-    input_csv = sys.argv[1]
-    output_dir = '.'
+# Parse command-line arguments, derive output and log-file naming, and set up the logger
+
+parser = argparse.ArgumentParser(description='Run network tests based on input CSV file.')
+# Positional arguments
+parser.add_argument('input_csv', help='Input CSV file')
+parser.add_argument('output_directory', nargs='?', default='.',
+                    help='Output directory (optional, default is current directory)')
+# Optional arguments
+parser.add_argument('-c', '--hostconfig', default='host_config.ini',
+                    help='Override the default hosts config file (optional, default is host_config.ini)')
+
+args = parser.parse_args()
+input_csv = args.input_csv
+output_dir = args.output_directory
+host_config_file = args.hostconfig
 
 # Remove the path from the input filename. We use this base name as the basis of results & log file names
 base_name = os.path.basename(input_csv).replace('.csv', '')
@@ -294,7 +305,9 @@ output_file = os.path.join(output_dir, f"{out_basename}.json")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
 #  a certain age, to avoid filling up the disk with old files.
 
-"""######################### Start of logger setup and configuration #########################"""
+"""########################### Start of logger setup and configuration ###########################
+   *****  ABSOLUTELY MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE THIS SECTION, AS LOGGING  *****
+   *****  IS NOT RUNNING UNTIL AFTER THIS SECTION                                            *****"""
 logger = logging.getLogger("ant")  # Create a custom logger - "ant" is an arbitrary name
 logger.setLevel(logging.INFO)  # set to logging.DEBUG for additional output during development
 
@@ -330,9 +343,27 @@ my_ip_addr = socket.gethostbyname(my_hostname)
 #  the NIC or OS, it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
 logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_hostname} to {my_ip_addr}.")
 
+logger.info(f"Reading host configuration file {host_config_file}.")
+host_config = configparser.ConfigParser()
+host_config.read(host_config_file)
+
 logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
+
+# Extract all unique hostnames from all_tests, and check if they're in the host_config file.
+unique_hostnames = set()       # Using a set automatically prevents duplicates
+for test in all_tests:
+    unique_hostnames.add(test['source'])
+
+# Check if each unique hostname in all_tests is in the host_config file. If not, log an error and halt execution.
+missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in host_config.sections()]
+if missing_hostnames:
+    logger.error(f"Missing hostnames in config.ini: {missing_hostnames}")
+    exit(1)  # Halt execution with error code (non-zero)
+else:
+    logger.info(f"All hostnames in input file are present in {host_config_file}.")
+
 
 # initialise the all_results dictionary with its high-level keys - these are lists of results of a given test type
 all_results = {
@@ -361,9 +392,11 @@ for test in all_tests:
         logger.debug(f"Test ID {id_number} of type {test_type} will be run.")
         results = run_test(test)
 
-        # Append the results to the appropriate list in all_results
-        key_name = test_type + "_tests"
-        all_results[key_name].append(results)
+        # if run_test failed (eg. SSH failure, test command failure, etc) then results will be None
+        if results is not None or results is None:
+            # Append the results to the appropriate list in all_results
+            key_name = test_type + "_tests"
+            all_results[key_name].append(results)
 
 # Write the results to a JSON file
 with open(output_file, 'w') as json_file:
