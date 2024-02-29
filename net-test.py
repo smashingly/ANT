@@ -253,9 +253,15 @@ def read_input_file(filename):
     # header row of the CSV file. The first character of the header row is "#" and this should be ignored when
     # constructing the first column's name.  Current header row = #id_number,test_type,destination,count,size
 
+    # CSV file MUST have header row. Need to check this, and if it's not present, throw an error. We will do this
+    # by checking whether the first character of header is = "#".  If it isn't, then we will log an error and halt.
+
     with open(filename, 'r') as input_file:
         reader = csv.reader(input_file)
         header = next(reader)                       # grab the first row of file (the header row)
+        if not header[0].startswith("#"):
+            logger.critical(f"Input file {filename} has no header row, or header row doesn't start with '#'. Halting execution.")
+            exit(1)
         header = [h.lstrip('#') for h in header]    # remove any leading '#' characters found in header fields
         data = []
 
