@@ -249,20 +249,22 @@ def run_test(test_params: dict):
 
 
 def read_input_file(filename):
-    # Read the input CSV file and return a list of dicts, each line being mapped to a dictionary, based on the
-    # header row of the CSV file. The first character of the header row is "#" and this should be ignored when
-    # constructing the first column's name.  Current header row = #id_number,test_type,destination,count,size
+    # Read the input CSV file and return a list of dicts, each line being mapped to a dictionary, based on hard-coded
+    # column names. The first row of the file MUST be a comment line starting with #. This can be used to explain to
+    # end users what the column names are, but note that the code doesn't use the header row to map column names to
+    # the data. It uses hard-coded column names. This is to prevent the end user from making mistakes in the header
+    # row, and to prevent the end user from changing the column names without changing the code. Any other rows that
+    # start with a # character will be ignored.  This makes it easy to comment out specific tests in the input file.
 
-    # CSV file MUST have header row. Need to check this, and if it's not present, throw an error. We will do this
-    # by checking whether the first character of header is = "#".  If it isn't, then we will log an error and halt.
+    column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
 
     with open(filename, 'r') as input_file:
         reader = csv.reader(input_file)
-        header = next(reader)                       # grab the first row of file (the header row)
-        if not header[0].startswith("#"):
-            logger.critical(f"Input file {filename} has no header row, or header row doesn't start with '#'. Halting execution.")
+        file_header = next(reader)                       # grab the first row of file (the header row)
+        if not file_header[0].startswith("#"):
+            logger.critical(f"Input file {filename} must have a first row that starts with '#'. Halting execution.")
             exit(1)
-        header = [h.lstrip('#') for h in header]    # remove any leading '#' characters found in header fields
+
         data = []
 
         # Construct a dictionary from the remaining reader rows, converting empty CSV values to None.
@@ -272,7 +274,7 @@ def read_input_file(filename):
                 logger.warning(f"Skipping row in input file starting with a '#' character: {row}")
                 continue
             else:
-                row_dict = {header[i]: value if value != "" else None for i, value in enumerate(row)}
+                row_dict = {column_headers[i]: value if value != "" else None for i, value in enumerate(row)}
                 # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
                 #  assign default values to missing test command parameters in the test-running function(s).
                 row_dict = {k: v for k, v in row_dict.items() if v is not None}
