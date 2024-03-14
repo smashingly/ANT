@@ -66,7 +66,7 @@ def parse_ping_results(test_data: dict):
             # It's hard to reliably parse loss% out of the string because some Linux OSes use slightly different
             # wording, or insert "+1 duplicates" in the middle of the string. So we calculate the loss ourselves.
             packet_loss_percent = round(((packets_txd - packets_rxd) / packets_txd) * 100, 4)
-            success_msg_suffix = f"{packets_txd} / {packets_rxd} / {packet_loss_percent}%  (#tx/#rx/loss)"
+            success_msg_suffix = f"{packets_txd}/{packets_rxd}/{packet_loss_percent}% (#tx/#rx/loss)"
 
         # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
         #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
@@ -74,8 +74,8 @@ def parse_ping_results(test_data: dict):
         #  the necessary key/value data from the results dict, then generates the appropriate message.
         # Note: we're using a separate print() statement because the logger will only display console messages if they're
         #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
-        success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: "
-                       f"{min_rtt} / {avg_rtt} / {max_rtt} / {stddev_rtt} ms  (min/avg/max/*dev), " + success_msg_suffix)
+        success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}', ping): Success. Result: "
+                       f"{min_rtt}/{avg_rtt}/{max_rtt}/{stddev_rtt} ms (min/avg/max/*dev), " + success_msg_suffix)
         print(success_msg)
         logger.info(success_msg)
 
@@ -147,7 +147,7 @@ def parse_iperf_results(test_data: dict):
     #  messages at WARNING level or above, so we can't use one logger.info() call to convey success to the console.
     # TODO: I've quickly added source & test in brackets just as we have in the ping parse function, haven't really
     #  tested it but this TODO is just a placeholder to make sure it's properly tested before the TODO is deleted.
-    msg = f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: {short_form_results}"
+    msg = f"Test ID {id_number} (src: '{source}', dst: '{dest}', {test_type}): Success. Result: {short_form_results}"
     print(msg)
     logger.info(msg)
 
