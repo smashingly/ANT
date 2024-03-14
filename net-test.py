@@ -11,6 +11,7 @@ import argparse
 import configparser
 
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
+PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
 
 
 def parse_ping_results(test_data: dict):
@@ -145,8 +146,6 @@ def parse_iperf_results(test_data: dict):
     #  the variables for that specific test type. This allows us to output short-form results in a one-line log entry.
     #  NOTE: We use a separate print() statement for the console output, because the logger will only display console
     #  messages at WARNING level or above, so we can't use one logger.info() call to convey success to the console.
-    # TODO: I've quickly added source & test in brackets just as we have in the ping parse function, haven't really
-    #  tested it but this TODO is just a placeholder to make sure it's properly tested before the TODO is deleted.
     msg = f"Test ID {id_number} (src: '{source}', dst: '{dest}', {test_type}): Success. Result: {short_form_results}"
     print(msg)
     logger.info(msg)
@@ -193,7 +192,7 @@ def run_test(test_params: dict):
         size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
         count = test_params.get('count', 10)  # optional field; set default of 10 pings if not specified
         # TODO: do something better for the interval later. Config file, or separate CSV field?
-        interval = 0.2  # temporarily hard-code this for now
+        interval = PING_INTERVAL
         test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
 
     elif test_params['test_type'] == "throughput":

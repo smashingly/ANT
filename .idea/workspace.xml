@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added source and dest info to test success text in parse_iperf_results()">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added test-type text to test success logging message.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -201,7 +201,23 @@
       <option name="project" value="LOCAL" />
       <updated>1710376942159</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="Added run-time duration to the closing log message.">
+      <option name="closed" value="true" />
+      <created>1710395564701</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1710395564701</updated>
+    </task>
+    <task id="LOCAL-00016" summary="Added test-type text to test success logging message.">
+      <option name="closed" value="true" />
+      <created>1710396037512</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1710396037512</updated>
+    </task>
+    <option name="localTasksCounter" value="17" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -230,6 +246,8 @@
     <MESSAGE value="Added check for lack of header row" />
     <MESSAGE value="New header-row logic to prevent KeyErrors" />
     <MESSAGE value="Added source and dest info to test success text in parse_iperf_results()" />
-    <option name="LAST_COMMIT_MESSAGE" value="Added source and dest info to test success text in parse_iperf_results()" />
+    <MESSAGE value="Added run-time duration to the closing log message." />
+    <MESSAGE value="Added test-type text to test success logging message." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added test-type text to test success logging message." />
   </component>
 </project>
