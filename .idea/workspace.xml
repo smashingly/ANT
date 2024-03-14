@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added test-type text to test success logging message.">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
-    </list>
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added PING_INTERVAL constant for readability/clarity" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -217,7 +214,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710396037512</updated>
     </task>
-    <option name="localTasksCounter" value="17" />
+    <task id="LOCAL-00017" summary="Added PING_INTERVAL constant for readability/clarity">
+      <option name="closed" value="true" />
+      <created>1710396312983</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1710396312983</updated>
+    </task>
+    <option name="localTasksCounter" value="18" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -248,6 +253,7 @@
     <MESSAGE value="Added source and dest info to test success text in parse_iperf_results()" />
     <MESSAGE value="Added run-time duration to the closing log message." />
     <MESSAGE value="Added test-type text to test success logging message." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added test-type text to test success logging message." />
+    <MESSAGE value="Added PING_INTERVAL constant for readability/clarity" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added PING_INTERVAL constant for readability/clarity" />
   </component>
 </project>
