@@ -23,15 +23,10 @@ def parse_ping_results(test_data: dict):
     source = test_data['test_params']['source']
     dest = test_data['test_params']['destination']
 
-    # We set these values to None so that any of the If statements that check for invalid ping result text can just
-    #  do nothing (other than log an error message). This saves repeating the same 2 lines of code in the If statements
+    # We set these values to None here, to avoid repeating the same 2 lines of code in the If statements
     #  that detect: A) no min/avg/max line; B) >1 min/avg/max line; and C) running on Windows OS.
     min_rtt, avg_rtt, max_rtt, stddev_rtt = None, None, None, None
     packets_txd, packets_rxd, packet_loss_percent = None, None, None
-
-    # DEBUG CODE FOR TEST-BREAKING THE PING PARSER
-    # raw_output = "min/avg/max\nmin/avg/max\nMultiple occurrences of min/avg/max/mdev"
-    # raw_output = "Hello there\nThis is a test\nThere is no occurrence of min, avg, max etc"
 
     # Isolate out the line in the ping output that contains the summary results
     rtt_line = [line for line in raw_output.split('\n') if 'min/avg/max' in line]
@@ -45,40 +40,33 @@ def parse_ping_results(test_data: dict):
         logger.error(f"Test ID {id_number}: Multiple lines found in ping output containing 'min/avg/max'. Skipping "
                      f"test. Full output of test:\n{raw_output}")
     else:
-        # Keep the text between (but excluding) " = " and " ms"
+        # Keep the text between " = " and " ms"
         # Example ping output line: 'round-trip min/avg/max/stddev = 0.053/0.154/0.243/0.063 ms'
         rtt_data = rtt_line[0].replace(" ms", "").split('=')[1].strip()
 
         # rtt_data now looks something like this: '0.053/0.154/0.243/0.063' - so we split it by the '/'
         min_rtt, avg_rtt, max_rtt, stddev_rtt = rtt_data.split('/')
 
-
-        # TODO: this isn't really effective; we need to check if the OS of the machine RUNNING THE TEST is Windows.
-        #  Either ditch this 'if' clause, or implement parsing of Windows-style pings (better approach).
-        if os.name == 'nt':         # Skip detection if this script is running on a Windows machine.
-            logger.info(f"Test ID {id_number}: Running on Windows; packet count & loss not analysed.")
-            success_msg_suffix = f"packet count & loss not analysed (running on Windows)."
+        # Create a list of any lines in the output that have 'packet loss' in them. There should only be one.
+        loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
+        if len(loss_lines) == 0:
+            logger.error(f"Test ID {id_number}: No line found in ping output containing 'packet loss'. Will record "
+                         f"RTT results but not tx/rx/lost packets. Full output of test:\n{raw_output}")
+            success_msg_suffix = f"packet count data not found in ping output."
         else:
-            # Create a list of any lines in the output that have 'packet loss' in them. There should only be one.
-            loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
-            if len(loss_lines) == 0:
-                logger.error(f"Test ID {id_number}: No line found in ping output containing 'packet loss'. Will record "
-                             f"RTT results but not tx/rx/lost packets. Full output of test:\n{raw_output}")
-                success_msg_suffix = f"packet count data not found in ping output."
-            else:
-                # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work
-                # for MacOS and most Linux, but won't work on Windows as it uses different wording and symbols.
-                # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
-                # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
-                loss_line = loss_lines[0]
-                split_line = loss_line.split(', ')       # ['10 packets transmitted', '10 packets received', etc...]
-                packets_txd = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
-                packets_rxd = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
+            # Grab the transmitted packets, received packets, and % packet loss from loss_line. This will work
+            # for MacOS and most Linux OSes.
+            # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
+            # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
+            loss_line = loss_lines[0]
+            split_line = loss_line.split(', ')       # ['10 packets transmitted', '10 packets received', etc...]
+            packets_txd = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
+            packets_rxd = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
 
-                # It's hard to reliably parse loss% out of the string because some Linux OSes use slightly different
-                # wording, or insert "+1 duplicates" in the middle of the string. So we calculate the loss ourselves.
-                packet_loss_percent = round(((packets_txd - packets_rxd) / packets_txd) * 100, 4)
-                success_msg_suffix = f"{packets_txd} / {packets_rxd} / {packet_loss_percent}%  (#tx/#rx/loss)"
+            # It's hard to reliably parse loss% out of the string because some Linux OSes use slightly different
+            # wording, or insert "+1 duplicates" in the middle of the string. So we calculate the loss ourselves.
+            packet_loss_percent = round(((packets_txd - packets_rxd) / packets_txd) * 100, 4)
+            success_msg_suffix = f"{packets_txd} / {packets_rxd} / {packet_loss_percent}%  (#tx/#rx/loss)"
 
         # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
         #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
@@ -115,6 +103,8 @@ def parse_iperf_results(test_data: dict):
     test_command = test_data['test_command']
     raw_output = test_data['raw_output']
     test_type = test_data['test_params']['test_type']
+    source = test_data['test_params']['source']
+    dest = test_data['test_params']['destination']
 
     # Convert the JSON string to a Python dictionary
     command_result = json.loads(raw_output)
@@ -155,7 +145,9 @@ def parse_iperf_results(test_data: dict):
     #  the variables for that specific test type. This allows us to output short-form results in a one-line log entry.
     #  NOTE: We use a separate print() statement for the console output, because the logger will only display console
     #  messages at WARNING level or above, so we can't use one logger.info() call to convey success to the console.
-    msg = f"Test ID {id_number}: Success. Result: {short_form_results}"
+    # TODO: I've quickly added source & test in brackets just as we have in the ping parse function, haven't really
+    #  tested it but this TODO is just a placeholder to make sure it's properly tested before the TODO is deleted.
+    msg = f"Test ID {id_number} (src: '{source}', dst: '{dest}'): Success. Result: {short_form_results}"
     print(msg)
     logger.info(msg)
 
@@ -337,6 +329,12 @@ logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 """######################### End of logger setup and configuration #########################"""
 
+# This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
+# different under Windows.  Secondly, the command-line options for the Windows ping command are completely different.
+if os.name == 'nt':
+    logger.critical(f"This script will not work on Windows. It's designed for Unix-like systems. Halting execution.")
+    exit(1)
+
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
 logger.info(f"Input CSV file: {input_csv}. Output file: {output_file}")
 
@@ -354,9 +352,12 @@ logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_h
 logger.info(f"Reading host configuration file {host_config_file}.")
 host_config = configparser.ConfigParser()
 host_config.read(host_config_file)
+# TODO: add validation of the config file, making sure that the relevant fields are defined and not empty etc
 
 logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
+# TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
+#  the test_type is valid, that the source and destination are valid, etc.
 logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
 # Extract all unique hostnames from all_tests
