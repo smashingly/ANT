@@ -275,6 +275,9 @@ def read_input_file(filename):
     return data
 
 
+# Record the start-time of program execution so we can output the duration at the end of the script
+execution_start_time = datetime.datetime.now()
+
 # Parse command-line arguments, derive output and log-file naming, and set up the logger
 
 parser = argparse.ArgumentParser(description='Run network tests based on input CSV file.')
@@ -407,4 +410,8 @@ logger.info(f"All tests have been iterated over. Writing results to {output_file
 with open(output_file, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
-logger.info(f"{'*' * 20} End of script execution {'*' * 20}")
+execution_duration = datetime.datetime.now() - execution_start_time
+# Create a string that expresses the duration in a human-readable format, hh:mm:ss
+execution_duration_str = str(execution_duration).split('.')[0]  # remove the microseconds from the string
+
+logger.info(f"{'*' * 20} End of script execution. Run-time was {execution_duration_str} {'*' * 20}")
