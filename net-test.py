@@ -4,6 +4,7 @@ import subprocess
 import csv
 import os
 import datetime
+import logging.handlers
 import logging
 import sys
 import socket
@@ -12,6 +13,8 @@ import configparser
 
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
 PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
+DEFAULT_HOST_CONFIG = './host_config.ini'
+DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH spec
 
 
 def parse_ping_results(test_data: dict):
@@ -278,23 +281,37 @@ def read_input_file(filename):
 execution_start_time = datetime.datetime.now()
 
 # Parse command-line arguments, derive output and log-file naming, and set up the logger
-
 parser = argparse.ArgumentParser(description='Run network tests based on input CSV file.')
 # Positional arguments
 parser.add_argument('input_csv', help='Input CSV file')
-parser.add_argument('output_directory', nargs='?', default='.',
-                    help='Output directory (optional, default is current directory)')
+parser.add_argument('results_directory', nargs='?', default='.',
+                    help='Results file output directory (optional, default is current directory)')
 # Optional arguments
-parser.add_argument('-c', '--hostconfig', default='host_config.ini',
-                    help='Override the default hosts config file (optional, default is host_config.ini)')
-
+parser.add_argument('-c', '--host-config', default=DEFAULT_HOST_CONFIG,
+                    help=f'Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})')
+parser.add_argument('-l', '--log-dir', default=DEFAULT_LOG_DIR,
+                    help=f'Log file output directory (optional, default is {DEFAULT_LOG_DIR})')
 args = parser.parse_args()
 input_csv = args.input_csv
-output_dir = args.output_directory
-host_config_file = args.hostconfig
+results_dir = args.results_directory        # Where the JSON file will be output to
+host_config_file = args.host_config
+log_dir = args.log_dir
+
+# This must be checked *before* logging is enabled; Other directories/files (eg. results_dir) are checked later.
+# TODO: This will be refactored out (see the code that checks folder/permissions for results_dir, below logging setup)
+if not os.path.exists(log_dir):
+    print(f"Log directory {log_dir} does not exist. Halting execution. "
+          f"Please create {log_dir} and try again. Preferred/default log directory is {DEFAULT_LOG_DIR}.")
+    exit(1)
+elif not os.access(log_dir, os.R_OK | os.W_OK):
+    print(f"Log directory {log_dir} does not have read and write permissions. Halting execution.")
+    exit(1)
 
 # Remove the path from the input filename. We use this base name as the basis of results & log file names
-base_name = os.path.basename(input_csv).replace('.csv', '')
+# base_name = os.path.basename(input_csv).replace('.csv', '')
+# TODO: once happy with this approach, remove the above line and the comment above it, and refactor this base_name
+#  assignment to be a CONSTANT at the top of the script so it's easy to find and change. Probably rename it to APP_NAME.
+base_name = "net-test"
 
 # Create the base name for output files by adding yyyymmddhhmmss to the base name.
 out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -302,20 +319,21 @@ out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 # TODO: This approach creates new files upon each program run, to avoid overwriting previous results. But over time
 #  it will result in a lot of files, so we may want to add log file rotation, to manage log files better. E.g.,
 #  keep the last 28 days worth of logs, and delete any old ones.
-log_file = os.path.join(output_dir, f"{base_name}.log")  # FIXME: temporarily changed it to basename while debugging
-output_file = os.path.join(output_dir, f"{out_basename}.json")
-# TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
-#  a certain age, to avoid filling up the disk with old files.
+log_file = os.path.join(log_dir, f"{base_name}.log")
 
+# TODO: refactor this into a function just to keep the main code body tidy
 """########################### Start of logger setup and configuration ###########################
    *****  ABSOLUTELY MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE THIS SECTION, AS LOGGING  *****
    *****  IS NOT RUNNING UNTIL AFTER THIS SECTION                                            *****"""
 logger = logging.getLogger("ant")  # Create a custom logger - "ant" is an arbitrary name
 logger.setLevel(logging.INFO)  # set to logging.DEBUG for additional output during development
-
+print(f"Logging to {log_file}")
 # Create handlers. Naming convention: c = console, f = file
 c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler(log_file)
+f_handler = logging.handlers.TimedRotatingFileHandler(
+    log_file, when="D", interval=1, backupCount=60)  # rotate daily, keep 60 days worth of logs
+# TODO: nuke the next line once I've tested log rotation
+# f_handler = logging.FileHandler(log_file)
 c_handler.setLevel(logging.WARNING)  # determines the error-level (or above) that will be sent to console
 f_handler.setLevel(logging.DEBUG)  # determines the error-level (or above) that will be sent to file
 
@@ -330,6 +348,26 @@ f_handler.setFormatter(f_format)
 logger.addHandler(c_handler)
 logger.addHandler(f_handler)
 """######################### End of logger setup and configuration #########################"""
+
+# TODO: consider making a function called something like setup_checks() which runs all the post-log-setup checks that
+#  come below (which themselves may be refactored into functions, such as the one to check a dir's existence & perms.
+#  Basically anything that isn't to do with parsing the input CSV or running tests, should go in there.
+
+# TODO: once tested and working, refactor this into a function whose purpose it is to check a dir's existence and that
+#  it's writable. This function should be called for all directories that the script writes to. Include a boolean
+#  switch "no_logger" which, if true, will output with print() rather than logger.error(). That way we can use the same
+#  function to check the log directory, even though the logger isn't set up yet. We may find that we need to add
+#  another parameter called reqd_permissions which defaults to os.W_OK | os.R_OK, but can be overridden if necessary.
+if not os.path.exists(results_dir):
+    logger.error(f"Results directory {results_dir} does not exist. Halting execution.")
+    exit(1)
+elif not os.access(results_dir, os.W_OK):
+    logger.error(f"Results directory {results_dir} does not have write permissions. Halting execution.")
+    exit(1)
+
+output_file = os.path.join(results_dir, f"{out_basename}.json")
+# TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
+#  a certain age, to avoid filling up the disk with old files.
 
 # This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
 # different under Windows.  Secondly, the command-line options for the Windows ping command are completely different.
