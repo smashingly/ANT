@@ -11,10 +11,47 @@ import socket
 import argparse
 import configparser
 
+# Constants that users/devs may want to play with and change:
+DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH standards
+LOG_LEVEL = logging.INFO        # logging level for the logger. Set to logging.DEBUG for additional output
+# TODO: move some of the more verbose logging messages to logging.DEBUG?
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
 PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
 DEFAULT_HOST_CONFIG = './host_config.ini'
-DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH spec
+
+
+def setup_logging(name, log_level, file_path):
+    """
+    Set up the logging for the script. This function is called at the start of the script, and returns a logger object
+    which can be used to log messages. The logger object is returned so that it can be used in the main code body,
+    otherwise it would only be accessible from within this function.
+    :param name: unique name for the logger (fairly arbitrary but must be used consistently throughout the program)
+    :param log_level: the logging level for the logger. Normally set to logging.INFO for production use, and set to
+    logging.DEBUG for additional output during development & troubleshooting.
+    :param file_path: path & filename of the log file to create.
+    :return: logger object
+    """
+    logger = logging.getLogger(name)  # Create a custom logger - "ant" is an arbitrary name
+    logger.setLevel(log_level)  # set to logging.DEBUG for additional output during development
+    print(f"Logging to {file_path}")
+    # Create handlers. Naming convention: c = console, f = file
+    c_handler = logging.StreamHandler()
+    f_handler = logging.handlers.TimedRotatingFileHandler(
+        log_file, when="D", interval=1, backupCount=60)  # rotate daily, keep 60 days worth of logs
+    c_handler.setLevel(logging.WARNING)  # determines the error-level (or above) that will be sent to console
+    f_handler.setLevel(logging.DEBUG)  # determines the error-level (or above) that will be sent to file
+
+    # Create formatters and add it to handlers
+    c_format = logging.Formatter("%(levelname)s: %(message)s")
+    f_format = logging.Formatter(fmt="%(asctime)s.%(msecs)03d - %(levelname)08s: %(funcName)s: %(message)s",
+                                 datefmt="%Y-%m-%d %H:%M:%S")
+    c_handler.setFormatter(c_format)
+    f_handler.setFormatter(f_format)
+
+    # Add handlers to the logger
+    logger.addHandler(c_handler)
+    logger.addHandler(f_handler)
+    return logger
 
 
 def parse_ping_results(test_data: dict):
@@ -313,40 +350,18 @@ elif not os.access(log_dir, os.R_OK | os.W_OK):
 #  assignment to be a CONSTANT at the top of the script so it's easy to find and change. Probably rename it to APP_NAME.
 base_name = "net-test"
 
+# TODO: we may want to create some kind of file rotation, otherwise we're going to end up with a lot of JSON files...
 # Create the base name for output files by adding yyyymmddhhmmss to the base name.
 out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-# TODO: This approach creates new files upon each program run, to avoid overwriting previous results. But over time
-#  it will result in a lot of files, so we may want to add log file rotation, to manage log files better. E.g.,
-#  keep the last 28 days worth of logs, and delete any old ones.
 log_file = os.path.join(log_dir, f"{base_name}.log")
 
-# TODO: refactor this into a function just to keep the main code body tidy
-"""########################### Start of logger setup and configuration ###########################
-   *****  ABSOLUTELY MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE THIS SECTION, AS LOGGING  *****
-   *****  IS NOT RUNNING UNTIL AFTER THIS SECTION                                            *****"""
-logger = logging.getLogger("ant")  # Create a custom logger - "ant" is an arbitrary name
-logger.setLevel(logging.INFO)  # set to logging.DEBUG for additional output during development
-print(f"Logging to {log_file}")
-# Create handlers. Naming convention: c = console, f = file
-c_handler = logging.StreamHandler()
-f_handler = logging.handlers.TimedRotatingFileHandler(
-    log_file, when="D", interval=1, backupCount=60)  # rotate daily, keep 60 days worth of logs
-# TODO: nuke the next line once I've tested log rotation
-# f_handler = logging.FileHandler(log_file)
-c_handler.setLevel(logging.WARNING)  # determines the error-level (or above) that will be sent to console
-f_handler.setLevel(logging.DEBUG)  # determines the error-level (or above) that will be sent to file
-
-# Create formatters and add it to handlers
-c_format = logging.Formatter("%(levelname)s: %(message)s")
-f_format = logging.Formatter(fmt="%(asctime)s.%(msecs)03d - %(levelname)08s: %(funcName)s: %(message)s",
-                             datefmt="%Y-%m-%d %H:%M:%S")
-c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
+"""
+########################### Start of logger setup and configuration ###########################
+*****  MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE LOGGER SETUP, AS LOGGING WILL NOT BE *****
+*****  RUNNING UNTIL AFTER THIS SECTION!                                                  *****"""
+logger_name = "net-test"
+logger = setup_logging(name=logger_name, log_level=logging.INFO, file_path=log_file)
 """######################### End of logger setup and configuration #########################"""
 
 # TODO: consider making a function called something like setup_checks() which runs all the post-log-setup checks that

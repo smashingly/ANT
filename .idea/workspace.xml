@@ -4,8 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added example INI file so that I can remove host_config.ini from GIT">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying.">
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
     </list>
@@ -235,7 +234,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710396911943</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying.">
+      <option name="closed" value="true" />
+      <created>1710914063494</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1710914063494</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -280,6 +287,7 @@
     <MESSAGE value="Added test-type text to test success logging message." />
     <MESSAGE value="Added PING_INTERVAL constant for readability/clarity" />
     <MESSAGE value="Added example INI file so that I can remove host_config.ini from GIT" />
-    <option name="LAST_COMMIT_MESSAGE" value="Added example INI file so that I can remove host_config.ini from GIT" />
+    <MESSAGE value="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying." />
   </component>
 </project>
