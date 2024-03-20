@@ -15,9 +15,10 @@ import configparser
 DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH standards
 LOG_LEVEL = logging.INFO        # logging level for the logger. Set to logging.DEBUG for additional output
 # TODO: move some of the more verbose logging messages to logging.DEBUG?
+BASE_NAME = "net-test"
+DEFAULT_HOST_CONFIG = './host_config.ini'
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
 PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
-DEFAULT_HOST_CONFIG = './host_config.ini'
 
 
 def setup_logging(name, log_level, file_path):
@@ -329,6 +330,9 @@ parser.add_argument('-c', '--host-config', default=DEFAULT_HOST_CONFIG,
 parser.add_argument('-l', '--log-dir', default=DEFAULT_LOG_DIR,
                     help=f'Log file output directory (optional, default is {DEFAULT_LOG_DIR})')
 args = parser.parse_args()
+# TODO: could add a parameter "--help-csv" which explains the CSV format. It would call a separate function where the
+#  help text is defined, to avoid cluttering the main code body.
+
 input_csv = args.input_csv
 results_dir = args.results_directory        # Where the JSON file will be output to
 host_config_file = args.host_config
@@ -344,17 +348,11 @@ elif not os.access(log_dir, os.R_OK | os.W_OK):
     print(f"Log directory {log_dir} does not have read and write permissions. Halting execution.")
     exit(1)
 
-# Remove the path from the input filename. We use this base name as the basis of results & log file names
-# base_name = os.path.basename(input_csv).replace('.csv', '')
-# TODO: once happy with this approach, remove the above line and the comment above it, and refactor this base_name
-#  assignment to be a CONSTANT at the top of the script so it's easy to find and change. Probably rename it to APP_NAME.
-base_name = "net-test"
-
 # TODO: we may want to create some kind of file rotation, otherwise we're going to end up with a lot of JSON files...
 # Create the base name for output files by adding yyyymmddhhmmss to the base name.
-out_basename = f"{base_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+out_basename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-log_file = os.path.join(log_dir, f"{base_name}.log")
+log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
 
 """
 ########################### Start of logger setup and configuration ###########################
