@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Refactored file existence and file permissions checks into check_dir_and_permissions()">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -258,7 +258,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710915925822</updated>
     </task>
-    <option name="localTasksCounter" value="22" />
+    <task id="LOCAL-00022" summary="Refactored file existence and file permissions checks into check_dir_and_permissions()">
+      <option name="closed" value="true" />
+      <created>1710917335178</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1710917335178</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -306,6 +314,7 @@
     <MESSAGE value="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying." />
     <MESSAGE value="Refactored logger setup into function for tidyness" />
     <MESSAGE value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
+    <MESSAGE value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
+    <option name="LAST_COMMIT_MESSAGE" value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
   </component>
 </project>

@@ -13,7 +13,7 @@ import configparser
 
 # Constants that users/devs may want to play with and change:
 DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH standards
-LOG_LEVEL = logging.INFO        # logging level for the logger. Set to logging.DEBUG for additional output
+FILE_LOG_LEVEL = logging.INFO        # logging level for the logger. Set to logging.DEBUG for additional output
 # TODO: move some of the more verbose logging messages to logging.DEBUG?
 BASE_NAME = "net-test"
 DEFAULT_HOST_CONFIG = './host_config.ini'
@@ -32,8 +32,9 @@ def setup_logging(name, log_level, file_path):
     :param file_path: path & filename of the log file to create.
     :return: logger object
     """
-    logger = logging.getLogger(name)  # Create a custom logger - "ant" is an arbitrary name
-    logger.setLevel(log_level)  # set to logging.DEBUG for additional output during development
+    logger = logging.getLogger(name)    # Create a custom logger that we can use throughout the program
+    # TODO: add an arg to arparse for verbose mode, which will set the log level to DEBUG instead of INFO
+    logger.setLevel(log_level)          # set to logging.DEBUG if you want additional output during development
     print(f"Logging to {file_path}")
     # Create handlers. Naming convention: c = console, f = file
     c_handler = logging.StreamHandler()
@@ -65,20 +66,33 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
     If set to True, output will be sent to console instead, using print() instead of logger.error()
     :param mode: access mode (eg. os.W_OK, os.R_OK, os.X_OK, etc), see os.access() for more details
     """
+    # TODO: the error message always says that the permissions must be "write", but are there situations where we need
+    #  to check for read permissions too? If so, we should make the error message more generic.
+
+    logging_enabled = not no_logger      # setting separate boolean purely to make the code more readable
+
+    if logging_enabled:   # if logging is enabled
+        logger = logging.getLogger(BASE_NAME)
+        logger.debug(f"Checking for existence and permissions of {description.lower()} {results_dir}.")
+
     if not os.path.exists(dir_path):
         message = f"{description} {dir_path} does not exist. Halting execution."
-        if no_logger:
-            print("\nFATAL ERROR:", message + "\n")
-        else:
+        if logging_enabled:
             logger.critical(message)
+        else:
+            print("\nFATAL ERROR:", message + "\n")
         exit(1)
     elif not os.access(dir_path, mode):
-        message = f"{description} {dir_path} does not have write permissions. Halting execution."
-        if no_logger:
-            print("\nFATAL ERROR:", message + "\n")
-        else:
+        message = (f"{description} {dir_path} does not have the required permissions for this user.")
+        if logging_enabled:
             logger.critical(message)
+        else:
+            print(f"\nFATAL ERROR: {message}\n" + " " * 13 +
+                  f"Run {BASE_NAME}.py with the '--help' option for information on the required permissions.\n")
         exit(1)
+
+    if logging_enabled:
+        logger.debug(f"{description} {dir_path} exists and has the correct permissions.")
 
 
 def parse_ping_results(test_data: dict):
@@ -341,24 +355,44 @@ def read_input_file(filename):
     return data
 
 
+# This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
+# different under Windows. Secondly, the command-line options for the Windows ping command are completely different.
+if os.name == 'nt':
+    print(f"FATAL: This script will not run on Windows systems. It is designed for execution on Unix-based "
+          f"operating systems. Halting execution.")
+    exit(1)
+
+
 # Record the start-time of program execution so we can output the duration at the end of the script
 execution_start_time = datetime.datetime.now()
 
 # Parse command-line arguments, derive output and log-file naming, and set up the logger
 parser = argparse.ArgumentParser(description='Run network tests based on input CSV file.')
 # Positional arguments
-parser.add_argument('input_csv', help='Input CSV file')
-parser.add_argument('results_directory', nargs='?', default='.',
-                    help='Results file output directory (optional, default is current directory)')
+parser.add_argument("input_csv", help="Input CSV file")
+parser.add_argument("results_directory", nargs="?", default=".",
+                    help="Results output directory (defaults to current dir). "
+                         "The user account executing this script must have write permissions to this folder.")
 # Optional arguments
-parser.add_argument('-c', '--host-config', default=DEFAULT_HOST_CONFIG,
-                    help=f'Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})')
-parser.add_argument('-l', '--log-dir', default=DEFAULT_LOG_DIR,
-                    help=f'Log file output directory (optional, default is {DEFAULT_LOG_DIR})')
+parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG,
+                    help=f"Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})")
+parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR,
+                    help=f"Log file output directory (default is {DEFAULT_LOG_DIR})."
+                         f"The user account executing this script must have read + write permissions to this folder.")
+# TODO: evaluate the level of most INFO logging messages, and decide whether --verbose could also set the console log to
+#  DEBUG or INFO level. This would be useful for troubleshooting, but it would also make the console output very noisy.
+#  But that might also point to some INFO level messages needing to be downgraded to DEBUG. Or we could have separate
+#  flags for console and file logging levels.  Or levels of verbosity, eg. -v for file DEBUG, -vv for file DEBUG plus
+#  console INFO, -vvv for file DEBUG plus console DEBUG. Don't overthink it though.
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help='Enable debug logging (applies to log file only)')
 args = parser.parse_args()
 # TODO: could add a parameter "--help-csv" which explains the CSV format. It would call a separate function where the
 #  help text is defined, to avoid cluttering the main code body.
 
+# Set the log level based on the --verbose flag
+if args.verbose:
+    FILE_LOG_LEVEL = logging.DEBUG
 input_csv = args.input_csv
 results_dir = args.results_directory        # Where the JSON file will be output to
 host_config_file = args.host_config
@@ -372,33 +406,22 @@ check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os
 out_basename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
+output_file = os.path.join(results_dir, f"{out_basename}.json")
+# TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
+#  a certain age, to avoid filling up the disk with old files.
 
 """
 ########################### Start of logger setup and configuration ###########################
 *****  MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE LOGGER SETUP, AS LOGGING WILL NOT BE *****
 *****  RUNNING UNTIL AFTER THIS SECTION!                                                  *****"""
-logger_name = "net-test"
-logger = setup_logging(name=logger_name, log_level=logging.INFO, file_path=log_file)
+logger_name = BASE_NAME
+logger = setup_logging(name=logger_name, log_level=FILE_LOG_LEVEL, file_path=log_file)
 """######################### End of logger setup and configuration #########################"""
-
-# TODO: consider making a function called something like setup_checks() which runs all the post-log-setup checks that
-#  come below (which themselves may be refactored into functions, such as the one to check a dir's existence & perms.
-#  Basically anything that isn't to do with parsing the input CSV or running tests, should go in there.
-
-check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
-
-output_file = os.path.join(results_dir, f"{out_basename}.json")
-# TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
-#  a certain age, to avoid filling up the disk with old files.
-
-# This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
-# different under Windows.  Secondly, the command-line options for the Windows ping command are completely different.
-if os.name == 'nt':
-    logger.critical(f"This script will not work on Windows. It's designed for Unix-like systems. Halting execution.")
-    exit(1)
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
 logger.info(f"Input CSV file: {input_csv}. Output file: {output_file}")
+
+check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
 
 # Get the local machine's hostname, FQDN and IP address. This is used in the test-run loop to determine if the test
 #  should be run locally or via SSH. We also use this to log the local machine's details at the start of the script.
