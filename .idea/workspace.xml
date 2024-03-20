@@ -4,9 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -242,7 +242,23 @@
       <option name="project" value="LOCAL" />
       <updated>1710914063494</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="Refactored logger setup into function for tidyness">
+      <option name="closed" value="true" />
+      <created>1710915651059</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1710915651059</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code.">
+      <option name="closed" value="true" />
+      <created>1710915925822</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1710915925822</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -288,6 +304,8 @@
     <MESSAGE value="Added PING_INTERVAL constant for readability/clarity" />
     <MESSAGE value="Added example INI file so that I can remove host_config.ini from GIT" />
     <MESSAGE value="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added --log-dir arg, and checks for existence &amp; RW perms in results_dir and log_dir. Needs refactoring/tidying." />
+    <MESSAGE value="Refactored logger setup into function for tidyness" />
+    <MESSAGE value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
+    <option name="LAST_COMMIT_MESSAGE" value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
   </component>
 </project>

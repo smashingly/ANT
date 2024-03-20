@@ -55,6 +55,32 @@ def setup_logging(name, log_level, file_path):
     return logger
 
 
+def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK, no_logger=False):
+    """
+    Check if a directory exists and that it has the specified permissions for the user under which this program is
+    executed. If it doesn't exist, or if it's not writable, log an error and halt
+    :param dir_path: directory to be checked
+    :param description: allows the error message to be more meaningful, eg. "Log directory <...> does not exist"
+    :param no_logger: set to True if no logger is set up when this function is called (ie. when checking log_dir).
+    If set to True, output will be sent to console instead, using print() instead of logger.error()
+    :param mode: access mode (eg. os.W_OK, os.R_OK, os.X_OK, etc), see os.access() for more details
+    """
+    if not os.path.exists(dir_path):
+        message = f"{description} {dir_path} does not exist. Halting execution."
+        if no_logger:
+            print("\nFATAL ERROR:", message + "\n")
+        else:
+            logger.critical(message)
+        exit(1)
+    elif not os.access(dir_path, mode):
+        message = f"{description} {dir_path} does not have write permissions. Halting execution."
+        if no_logger:
+            print("\nFATAL ERROR:", message + "\n")
+        else:
+            logger.critical(message)
+        exit(1)
+
+
 def parse_ping_results(test_data: dict):
     # This function parses the results of a ping test. It takes a dictionary as input, containing the following
     # keys: id_number, timestamp, test_params, test_command, and raw_output. It returns a dictionary containing the
@@ -339,14 +365,7 @@ host_config_file = args.host_config
 log_dir = args.log_dir
 
 # This must be checked *before* logging is enabled; Other directories/files (eg. results_dir) are checked later.
-# TODO: This will be refactored out (see the code that checks folder/permissions for results_dir, below logging setup)
-if not os.path.exists(log_dir):
-    print(f"Log directory {log_dir} does not exist. Halting execution. "
-          f"Please create {log_dir} and try again. Preferred/default log directory is {DEFAULT_LOG_DIR}.")
-    exit(1)
-elif not os.access(log_dir, os.R_OK | os.W_OK):
-    print(f"Log directory {log_dir} does not have read and write permissions. Halting execution.")
-    exit(1)
+check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
 
 # TODO: we may want to create some kind of file rotation, otherwise we're going to end up with a lot of JSON files...
 # Create the base name for output files by adding yyyymmddhhmmss to the base name.
@@ -366,17 +385,7 @@ logger = setup_logging(name=logger_name, log_level=logging.INFO, file_path=log_f
 #  come below (which themselves may be refactored into functions, such as the one to check a dir's existence & perms.
 #  Basically anything that isn't to do with parsing the input CSV or running tests, should go in there.
 
-# TODO: once tested and working, refactor this into a function whose purpose it is to check a dir's existence and that
-#  it's writable. This function should be called for all directories that the script writes to. Include a boolean
-#  switch "no_logger" which, if true, will output with print() rather than logger.error(). That way we can use the same
-#  function to check the log directory, even though the logger isn't set up yet. We may find that we need to add
-#  another parameter called reqd_permissions which defaults to os.W_OK | os.R_OK, but can be overridden if necessary.
-if not os.path.exists(results_dir):
-    logger.error(f"Results directory {results_dir} does not exist. Halting execution.")
-    exit(1)
-elif not os.access(results_dir, os.W_OK):
-    logger.error(f"Results directory {results_dir} does not have write permissions. Halting execution.")
-    exit(1)
+check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
 
 output_file = os.path.join(results_dir, f"{out_basename}.json")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
