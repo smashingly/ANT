@@ -6,10 +6,18 @@ import os
 import datetime
 import logging.handlers
 import logging
-import sys
+# import sys
 import socket
 import argparse
 import configparser
+
+# This is the version number of the script. We are using SemVer (Semantic Versioning) system. The version number
+# consists of three numbers separated by dots. The first number is the major version, the second number is the minor
+# version, and the third number is the patch version. The major version is incremented when there are breaking changes.
+# The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
+# incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
+# the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
+VERSION = "1.1.0"
 
 # Constants that users/devs may want to play with and change:
 DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH standards
@@ -20,6 +28,46 @@ DEFAULT_HOST_CONFIG = './host_config.ini'
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
 PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
 
+
+def get_cmdline_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments using argparse. This function is called at the start of the script, and returns the
+    parsed arguments. The argparse.ArgumentParser object is created here, and the arguments are defined. The function
+    then returns the parsed arguments to the main code body, where they can be used to set up the logger, and to
+    determine input/output file paths.  The reason for wrapping this into a function is simply for main body code
+    readability - it makes the main code body easier to read, as the argparse setup is quite verbose.
+    :return: parsed arguments (type: argparse.Namespace)
+    """
+    # TODO: play with the 'epilog' arg to argparse.ArgumentParser() to make the help text more useful. Consider adding
+    #   an epilog that explains the CSV format, and/or how to use the host_config file, and the permissions required
+    #   for the log and results directories.
+    # Parse command-line arguments, derive output and log-file naming, and set up the logger
+    parser = argparse.ArgumentParser(
+        description=f"Net-test (ANT) version {VERSION}.\n"
+                    f"Runs network tests on local & remote hosts based on input CSV file.")
+    # Positional arguments
+    parser.add_argument("input_csv", help="Input CSV file")
+    parser.add_argument("results_directory", nargs="?", default=".",
+                        help="Results output directory (defaults to current dir). "
+                             "The user account executing this script must have write permissions to this folder.")
+    # Optional arguments
+    parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG,
+                        help=f"Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})")
+    parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR,
+                        help=f"Log file output directory (default is {DEFAULT_LOG_DIR})."
+                             f"The user account executing this script must have read + write permissions to this folder.")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}")
+    # TODO: evaluate the level of most INFO logging messages, and decide whether --verbose could also set the console log to
+    #  DEBUG or INFO level. This would be useful for troubleshooting, but it would also make the console output very noisy.
+    #  But that might also point to some INFO level messages needing to be downgraded to DEBUG. Or we could have separate
+    #  flags for console and file logging levels.  Or levels of verbosity, eg. -v for file DEBUG, -vv for file DEBUG plus
+    #  console INFO, -vvv for file DEBUG plus console DEBUG. Don't overthink it though.
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        help='Enable debug logging (applies to log file only)')
+    # TODO: could add a parameter "--help-csv" which explains the CSV format. It would call a separate function where the
+    #  help text is defined, to avoid cluttering the main code body.
+
+    return parser.parse_args()
 
 def setup_logging(name, log_level, file_path):
     """
@@ -362,34 +410,14 @@ if os.name == 'nt':
           f"operating systems. Halting execution.")
     exit(1)
 
-
 # Record the start-time of program execution so we can output the duration at the end of the script
 execution_start_time = datetime.datetime.now()
 
-# Parse command-line arguments, derive output and log-file naming, and set up the logger
-parser = argparse.ArgumentParser(description='Run network tests based on input CSV file.')
-# Positional arguments
-parser.add_argument("input_csv", help="Input CSV file")
-parser.add_argument("results_directory", nargs="?", default=".",
-                    help="Results output directory (defaults to current dir). "
-                         "The user account executing this script must have write permissions to this folder.")
-# Optional arguments
-parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG,
-                    help=f"Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})")
-parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR,
-                    help=f"Log file output directory (default is {DEFAULT_LOG_DIR})."
-                         f"The user account executing this script must have read + write permissions to this folder.")
-# TODO: evaluate the level of most INFO logging messages, and decide whether --verbose could also set the console log to
-#  DEBUG or INFO level. This would be useful for troubleshooting, but it would also make the console output very noisy.
-#  But that might also point to some INFO level messages needing to be downgraded to DEBUG. Or we could have separate
-#  flags for console and file logging levels.  Or levels of verbosity, eg. -v for file DEBUG, -vv for file DEBUG plus
-#  console INFO, -vvv for file DEBUG plus console DEBUG. Don't overthink it though.
-parser.add_argument('-v', '--verbose', action='store_true',
-                    help='Enable debug logging (applies to log file only)')
-args = parser.parse_args()
-# TODO: could add a parameter "--help-csv" which explains the CSV format. It would call a separate function where the
-#  help text is defined, to avoid cluttering the main code body.
+# Call my custom function that wraps all the argparse stuff, to keep the main code body tidy.
+args = get_cmdline_args()
 
+# TODO: add another if-block for the yet-to-be-implemented -v/--version arg. It will simply display the version number,
+#  then exit.  Put that if statement here, ie. before the statements below. It should be a simple print() statement.
 # Set the log level based on the --verbose flag
 if args.verbose:
     FILE_LOG_LEVEL = logging.DEBUG
@@ -401,25 +429,23 @@ log_dir = args.log_dir
 # This must be checked *before* logging is enabled; Other directories/files (eg. results_dir) are checked later.
 check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
 
-# TODO: we may want to create some kind of file rotation, otherwise we're going to end up with a lot of JSON files...
-# Create the base name for output files by adding yyyymmddhhmmss to the base name.
-out_basename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
-output_file = os.path.join(results_dir, f"{out_basename}.json")
+# Add yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
+output_filename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+output_filepath = os.path.join(results_dir, f"{output_filename}")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
-#  a certain age, to avoid filling up the disk with old files.
+#  a certain age, to avoid filling up the disk with JSON files.
 
 """
 ########################### Start of logger setup and configuration ###########################
 *****  MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE LOGGER SETUP, AS LOGGING WILL NOT BE *****
 *****  RUNNING UNTIL AFTER THIS SECTION!                                                  *****"""
+log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
 logger_name = BASE_NAME
 logger = setup_logging(name=logger_name, log_level=FILE_LOG_LEVEL, file_path=log_file)
 """######################### End of logger setup and configuration #########################"""
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
-logger.info(f"Input CSV file: {input_csv}. Output file: {output_file}")
+logger.info(f"Input CSV file: {input_csv}. Output file: {output_filepath}")
 
 check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
 
@@ -442,11 +468,11 @@ host_config.read(host_config_file)
 logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 # TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
-#  the test_type is valid, that the source and destination are valid, etc.
+#  the test_type is valid, that the source and destination are valid, sources exist in the host config file, etc.
 logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
 # Extract all unique hostnames from all_tests
-unique_hostnames = set()       # Using a set automatically prevents duplicates
+unique_hostnames = set()       # Using a set automatically prevents duplicates, as sets don't allow them
 for test in all_tests:
     unique_hostnames.add(test['source'])
 
@@ -488,8 +514,8 @@ for test in all_tests:
             all_results[key_name].append(results)
 
 # Write the results to a JSON file
-logger.info(f"All tests have been iterated over. Writing results to {output_file}.")
-with open(output_file, 'w') as json_file:
+logger.info(f"All tests have been iterated over. Writing results to {output_filepath}.")
+with open(output_filepath, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
 execution_duration = datetime.datetime.now() - execution_start_time

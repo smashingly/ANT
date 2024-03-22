@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Refactored file existence and file permissions checks into check_dir_and_permissions()">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -266,7 +266,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710917335178</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg.">
+      <option name="closed" value="true" />
+      <created>1710920318703</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1710920318703</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -315,6 +323,7 @@
     <MESSAGE value="Refactored logger setup into function for tidyness" />
     <MESSAGE value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
     <MESSAGE value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
+    <MESSAGE value="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg." />
+    <option name="LAST_COMMIT_MESSAGE" value="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg." />
   </component>
 </project>
