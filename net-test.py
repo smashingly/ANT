@@ -128,29 +128,25 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
     If set to True, output will be sent to console instead, using print() instead of logger.error()
     :param mode: access mode (eg. os.W_OK, os.R_OK, os.X_OK, etc), see os.access() for more details
     """
-    # TODO: the error message always says that the permissions must be "write", but are there situations where we need
-    #  to check for read permissions too? If so, we should make the error message more generic.
-
     logging_enabled = not no_logger      # setting separate boolean purely to make the code more readable
 
     if logging_enabled:   # if logging is enabled
         logger = logging.getLogger(BASE_NAME)
         logger.debug(f"Checking for existence and permissions of {description.lower()} {results_dir}.")
 
-    if not os.path.exists(dir_path):
-        message = f"{description} {dir_path} does not exist. Halting execution."
-        if logging_enabled:
-            logger.critical(message)
-        else:
-            print("\nFATAL ERROR:", message + "\n")
-        exit(1)
-    elif not os.access(dir_path, mode):
-        message = (f"{description} {dir_path} does not have the required permissions for this user.")
+    # We OR both of these tests, because either of these tests will fail if the file doesn't exist or the user doesn't
+    #  have the required permissions. This is because you can't check for a file's existence if you don't have Read
+    #  permissions for that file, and you can't check a file's permissions if it doesn't exist. If you have separate
+    #  if/elif statements for existence and permission checks, whichever test is the first, will fail regardless of
+    #  whether it's an existence issue or a permissions issue.
+    #  The easy fix is to combine the tests with an OR, and have a consolidated but less-precise error message.
+    if not os.access(dir_path, mode) or not os.path.exists(dir_path):
+        message = (f"{description} {dir_path} does not exist, or doesn't have the required permissions for this user.")
         if logging_enabled:
             logger.critical(message)
         else:
             print(f"\nFATAL ERROR: {message}\n" + " " * 13 +
-                  f"Run {BASE_NAME}.py with the '--help' option for information on the required permissions.\n")
+                  f"Run {BASE_NAME}.py with the '--help' option for information on usage & permissions.\n")
         exit(1)
 
     if logging_enabled:
@@ -459,7 +455,9 @@ logger = setup_logging(name=logger_name, log_level=LOGGING_LEVEL, file_path=log_
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
 logger.info(f"Input CSV file: {input_csv}. Output file: {output_filepath}")
 
+# Check that our input and output directories exist and have the correct permissions
 check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
+check_dir_and_permissions(dir_path=input_csv, description="Input file", mode=os.R_OK)
 
 # Get the local machine's hostname, FQDN and IP address. This is used in the test-run loop to determine if the test
 #  should be run locally or via SSH. We also use this to log the local machine's details at the start of the script.
