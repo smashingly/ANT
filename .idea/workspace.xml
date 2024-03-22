@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -274,7 +274,15 @@
       <option name="project" value="LOCAL" />
       <updated>1710920318703</updated>
     </task>
-    <option name="localTasksCounter" value="24" />
+    <task id="LOCAL-00024" summary="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant.">
+      <option name="closed" value="true" />
+      <created>1711076998432</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1711076998432</updated>
+    </task>
+    <option name="localTasksCounter" value="25" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -324,6 +332,7 @@
     <MESSAGE value="Refactored base_name to BASE_NAME, defined at top of code. Deleted old base_name derivation code." />
     <MESSAGE value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
     <MESSAGE value="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg." />
-    <option name="LAST_COMMIT_MESSAGE" value="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg." />
+    <MESSAGE value="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant." />
+    <option name="LAST_COMMIT_MESSAGE" value="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant." />
   </component>
 </project>

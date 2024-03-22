@@ -6,7 +6,6 @@ import os
 import datetime
 import logging.handlers
 import logging
-# import sys
 import socket
 import argparse
 import configparser
@@ -17,16 +16,22 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "1.1.0"
+VERSION = "2.0.0"
 
-# Constants that users/devs may want to play with and change:
-DEFAULT_LOG_DIR = '/var/log/net-test'  # This is the default log directory, as per the Linux FSH standards
-FILE_LOG_LEVEL = logging.INFO        # logging level for the logger. Set to logging.DEBUG for additional output
-# TODO: move some of the more verbose logging messages to logging.DEBUG?
+# Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
+DEFAULT_LOG_DIR = "./"
+DEFAULT_RESULTS_DIR = "./"
+DEFAULT_INPUT_CSV = "./net-test.csv"
+DEFAULT_HOST_CONFIG = "./host_config.ini"
+# TODO: think about adding default locations for the remaining in/out files, eg. results, etc
+
+# Other constants that are unlikely to need changing:
+LOGGING_LEVEL = logging.INFO        # can be overridden using the -V/--verbose argument
 BASE_NAME = "net-test"
-DEFAULT_HOST_CONFIG = './host_config.ini'
+
+# Constants that users/devs may need to play with and change:
 TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
-PING_INTERVAL = 0.2  # seconds between pings, for latency tests. Used in run_tests()
+PING_INTERVAL = 0.2  # seconds between pings, used across all latency tests. Used in run_tests().
 
 
 def get_cmdline_args() -> argparse.Namespace:
@@ -38,6 +43,7 @@ def get_cmdline_args() -> argparse.Namespace:
     readability - it makes the main code body easier to read, as the argparse setup is quite verbose.
     :return: parsed arguments (type: argparse.Namespace)
     """
+
     # TODO: play with the 'epilog' arg to argparse.ArgumentParser() to make the help text more useful. Consider adding
     #   an epilog that explains the CSV format, and/or how to use the host_config file, and the permissions required
     #   for the log and results directories.
@@ -45,18 +51,25 @@ def get_cmdline_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=f"Net-test (ANT) version {VERSION}.\n"
                     f"Runs network tests on local & remote hosts based on input CSV file.")
-    # Positional arguments
-    parser.add_argument("input_csv", help="Input CSV file")
-    parser.add_argument("results_directory", nargs="?", default=".",
-                        help="Results output directory (defaults to current dir). "
+
+    # Configure the command-line arguments
+    parser.add_argument("-i", "--input", default=DEFAULT_INPUT_CSV, metavar="<input file>",
+                        help=f"Input CSV file containing test parameters. (default is '{DEFAULT_INPUT_CSV}'). "
+                             f"The user account executing this script must have read permissions to this file.")
+
+    parser.add_argument("-o", "--output", default=DEFAULT_RESULTS_DIR, metavar="<output dir>",
+                        help=f"Results output directory (default is '{DEFAULT_LOG_DIR}'). "
                              "The user account executing this script must have write permissions to this folder.")
-    # Optional arguments
-    parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG,
+
+    parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG, metavar="<host config>",
                         help=f"Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})")
-    parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR,
-                        help=f"Log file output directory (default is {DEFAULT_LOG_DIR})."
+
+    parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR, metavar="<log dir>",
+                        help=f"Log file output directory (default is '{DEFAULT_LOG_DIR}'). "
                              f"The user account executing this script must have read + write permissions to this folder.")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}")
+
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}",
+                        help="Display the version number and exit.")
     # TODO: evaluate the level of most INFO logging messages, and decide whether --verbose could also set the console log to
     #  DEBUG or INFO level. This would be useful for troubleshooting, but it would also make the console output very noisy.
     #  But that might also point to some INFO level messages needing to be downgraded to DEBUG. Or we could have separate
@@ -68,6 +81,7 @@ def get_cmdline_args() -> argparse.Namespace:
     #  help text is defined, to avoid cluttering the main code body.
 
     return parser.parse_args()
+
 
 def setup_logging(name, log_level, file_path):
     """
@@ -81,13 +95,11 @@ def setup_logging(name, log_level, file_path):
     :return: logger object
     """
     logger = logging.getLogger(name)    # Create a custom logger that we can use throughout the program
-    # TODO: add an arg to arparse for verbose mode, which will set the log level to DEBUG instead of INFO
     logger.setLevel(log_level)          # set to logging.DEBUG if you want additional output during development
-    print(f"Logging to {file_path}")
     # Create handlers. Naming convention: c = console, f = file
     c_handler = logging.StreamHandler()
     f_handler = logging.handlers.TimedRotatingFileHandler(
-        log_file, when="D", interval=1, backupCount=60)  # rotate daily, keep 60 days worth of logs
+        filename=file_path, when="D", interval=1, backupCount=60)  # rotate daily, keep 60 days worth of logs
     c_handler.setLevel(logging.WARNING)  # determines the error-level (or above) that will be sent to console
     f_handler.setLevel(logging.DEBUG)  # determines the error-level (or above) that will be sent to file
 
@@ -101,6 +113,8 @@ def setup_logging(name, log_level, file_path):
     # Add handlers to the logger
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
+
+    print(f"Logging to {file_path}")
     return logger
 
 
@@ -416,20 +430,18 @@ execution_start_time = datetime.datetime.now()
 # Call my custom function that wraps all the argparse stuff, to keep the main code body tidy.
 args = get_cmdline_args()
 
-# TODO: add another if-block for the yet-to-be-implemented -v/--version arg. It will simply display the version number,
-#  then exit.  Put that if statement here, ie. before the statements below. It should be a simple print() statement.
 # Set the log level based on the --verbose flag
 if args.verbose:
-    FILE_LOG_LEVEL = logging.DEBUG
-input_csv = args.input_csv
-results_dir = args.results_directory        # Where the JSON file will be output to
+    LOGGING_LEVEL = logging.DEBUG
+input_csv = args.input
+results_dir = args.output        # Where the JSON file will be output to
 host_config_file = args.host_config
 log_dir = args.log_dir
 
 # This must be checked *before* logging is enabled; Other directories/files (eg. results_dir) are checked later.
 check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
 
-# Add yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
+# Append yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
 output_filename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
 output_filepath = os.path.join(results_dir, f"{output_filename}")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
@@ -441,7 +453,7 @@ output_filepath = os.path.join(results_dir, f"{output_filename}")
 *****  RUNNING UNTIL AFTER THIS SECTION!                                                  *****"""
 log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
 logger_name = BASE_NAME
-logger = setup_logging(name=logger_name, log_level=FILE_LOG_LEVEL, file_path=log_file)
+logger = setup_logging(name=logger_name, log_level=LOGGING_LEVEL, file_path=log_file)
 """######################### End of logger setup and configuration #########################"""
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
