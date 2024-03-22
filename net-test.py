@@ -16,7 +16,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.0.0"
+VERSION = "2.0.2"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -132,7 +132,7 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
 
     if logging_enabled:   # if logging is enabled
         logger = logging.getLogger(BASE_NAME)
-        logger.debug(f"Checking for existence and permissions of {description.lower()} {results_dir}.")
+        logger.debug(f"Checking for existence and permissions of {description.lower()} '{dir_path}'.")
 
     # We OR both of these tests, because either of these tests will fail if the file doesn't exist or the user doesn't
     #  have the required permissions. This is because you can't check for a file's existence if you don't have Read
@@ -151,6 +151,13 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
 
     if logging_enabled:
         logger.debug(f"{description} {dir_path} exists and has the correct permissions.")
+
+
+def test_data_validated_ok(test_data: list):
+    # this function will eventually run through test_data and validate things like test_type, source, destination, etc.
+    # It will log any specific errors found, along with the offending line and field, and return False if any errors are
+    # found. If no errors are found, it will return True.
+    return True        # TODO: for now this will do nothing (I'm doing this TDD-style)
 
 
 def parse_ping_results(test_data: dict):
@@ -413,6 +420,23 @@ def read_input_file(filename):
     return data
 
 
+def validate_host_config_mappings(tests: list):
+    # Extract all unique hostnames from tests
+    unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
+    for test in tests:
+        unique_hostnames.add(test['source'])
+    # Make a list of all hostnames in the host_config file
+    all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
+    # Check if each unique test source host in the CSV has an entry in the host_config file. If not, then quit.
+    missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
+    if missing_hostnames:
+        logger.critical(
+            f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
+        exit(1)  # Halt execution with error code (non-zero)
+    else:
+        logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
+
+
 # This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
 # different under Windows. Secondly, the command-line options for the Windows ping command are completely different.
 if os.name == 'nt':
@@ -423,23 +447,21 @@ if os.name == 'nt':
 # Record the start-time of program execution so we can output the duration at the end of the script
 execution_start_time = datetime.datetime.now()
 
-# Call my custom function that wraps all the argparse stuff, to keep the main code body tidy.
+# Process command-line arguments
 args = get_cmdline_args()
-
-# Set the log level based on the --verbose flag
 if args.verbose:
     LOGGING_LEVEL = logging.DEBUG
-input_csv = args.input
-results_dir = args.output        # Where the JSON file will be output to
-host_config_file = args.host_config
 log_dir = args.log_dir
+input_csv = args.input
+results_dir = args.output
+host_config_file = args.host_config
 
-# This must be checked *before* logging is enabled; Other directories/files (eg. results_dir) are checked later.
+# This must be checked *before* logging is enabled. Other directories/files are checked after logging is enabled.
 check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
 
 # Append yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
-output_filename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
-output_filepath = os.path.join(results_dir, f"{output_filename}")
+results_filename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+results_filepath = os.path.join(results_dir, f"{results_filename}")
 # TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
 #  a certain age, to avoid filling up the disk with JSON files.
 
@@ -453,49 +475,39 @@ logger = setup_logging(name=logger_name, log_level=LOGGING_LEVEL, file_path=log_
 """######################### End of logger setup and configuration #########################"""
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
-logger.info(f"Input CSV file: {input_csv}. Output file: {output_filepath}")
+logger.info(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}")
 
 # Check that our input and output directories exist and have the correct permissions
 check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
 check_dir_and_permissions(dir_path=input_csv, description="Input file", mode=os.R_OK)
 
-# Get the local machine's hostname, FQDN and IP address. This is used in the test-run loop to determine if the test
-#  should be run locally or via SSH. We also use this to log the local machine's details at the start of the script.
+# Get the local hostname, FQDN and IP address. This is used to decide if a given test will be run locally, or via SSH.
 logger.debug("Getting local machine's hostname, FQDN and IP address.")
 my_hostname = socket.gethostname().lower().split('.')[0]  # Extract the part before the first dot
 my_fqdn = socket.getfqdn().lower()
 my_ip_addr = socket.gethostbyname(my_hostname)
 
 # The wording of this log entry is carefully chosen, to make it clear that the my_ip_addr is not pulled from
-#  the NIC or OS, it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
+#  the NIC or OS; it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
 logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_hostname} to {my_ip_addr}.")
+
+logger.debug("Reading input file and constructing test list.")
+all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
+
+# TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
+#  the test_type is valid, that the source and destination are valid, sources exist in the host config file, etc.
+if not test_data_validated_ok(all_tests):
+    logger.critical(f"Input file {input_csv} contains invalid data. Halting execution.")
+    exit(1)
+logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
 logger.info(f"Reading host configuration file {host_config_file}.")
 host_config = configparser.ConfigParser()
 host_config.read(host_config_file)
 # TODO: add validation of the config file, making sure that the relevant fields are defined and not empty etc
 
-logger.debug("Reading input file and constructing test list.")
-all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
-# TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
-#  the test_type is valid, that the source and destination are valid, sources exist in the host config file, etc.
-logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
-
-# Extract all unique hostnames from all_tests
-unique_hostnames = set()       # Using a set automatically prevents duplicates, as sets don't allow them
-for test in all_tests:
-    unique_hostnames.add(test['source'])
-
-# Make a list of all hostnames in the host_config file
-all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
-
-# Check if each unique hostname in all_tests is in the host_config file. If not, log an error and halt execution.
-missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
-if missing_hostnames:
-    logger.critical(f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
-    exit(1)  # Halt execution with error code (non-zero)
-else:
-    logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
+# Check that the host_config file has corresponding entries for each unique test source hostname.
+validate_host_config_mappings(all_tests)
 
 # initialise the all_results dictionary with its high-level keys
 all_results = {
@@ -524,8 +536,8 @@ for test in all_tests:
             all_results[key_name].append(results)
 
 # Write the results to a JSON file
-logger.info(f"All tests have been iterated over. Writing results to {output_filepath}.")
-with open(output_filepath, 'w') as json_file:
+logger.info(f"All tests have been iterated over. Writing results to {results_filepath}.")
+with open(results_filepath, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
 execution_duration = datetime.datetime.now() - execution_start_time

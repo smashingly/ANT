@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -282,7 +282,23 @@
       <option name="project" value="LOCAL" />
       <updated>1711076998432</updated>
     </task>
-    <option name="localTasksCounter" value="25" />
+    <task id="LOCAL-00025" summary="v2.0.0. All args are now optional with defaults. This breaks compatibility with previous versions.">
+      <option name="closed" value="true" />
+      <created>1711080067602</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1711080067602</updated>
+    </task>
+    <task id="LOCAL-00026" summary="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one.">
+      <option name="closed" value="true" />
+      <created>1711081747777</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1711081747777</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -309,7 +325,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="First working version" />
     <MESSAGE value="Fixed bug that failed to clean out &quot; ms&quot; at end of stddev RTT in CSV output" />
     <MESSAGE value="Refactored numerous internals - same functionality as previous commit, except now we have Pythong logging module." />
     <MESSAGE value="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed." />
@@ -333,6 +348,8 @@
     <MESSAGE value="Refactored file existence and file permissions checks into check_dir_and_permissions()" />
     <MESSAGE value="Improved logging for check_dir_and_permissions. Added const for LOG_LEVEL with override via new -v/--verbose arg." />
     <MESSAGE value="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant." />
-    <option name="LAST_COMMIT_MESSAGE" value="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant." />
+    <MESSAGE value="v2.0.0. All args are now optional with defaults. This breaks compatibility with previous versions." />
+    <MESSAGE value="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one." />
+    <option name="LAST_COMMIT_MESSAGE" value="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one." />
   </component>
 </project>
