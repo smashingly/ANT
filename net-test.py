@@ -16,14 +16,13 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
 DEFAULT_RESULTS_DIR = "./"
 DEFAULT_INPUT_CSV = "./net-test.csv"
 DEFAULT_HOST_CONFIG = "./host_config.ini"
-# TODO: think about adding default locations for the remaining in/out files, eg. results, etc
 
 # Other constants that are unlikely to need changing:
 LOGGING_LEVEL = logging.INFO        # can be overridden using the -V/--verbose argument
@@ -141,7 +140,7 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
     #  whether it's an existence issue or a permissions issue.
     #  The easy fix is to combine the tests with an OR, and have a consolidated but less-precise error message.
     if not os.access(dir_path, mode) or not os.path.exists(dir_path):
-        message = (f"{description} {dir_path} does not exist, or doesn't have the required permissions for this user.")
+        message = f"{description} {dir_path} does not exist, or doesn't have the required permissions for this user."
         if logging_enabled:
             logger.critical(message)
         else:
@@ -337,7 +336,7 @@ def run_test(test_params: dict):
     if test_params['test_type'] == "latency":
         size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
         count = test_params.get('count', 10)  # optional field; set default of 10 pings if not specified
-        # TODO: do something better for the interval later. Config file, or separate CSV field?
+        # TODO: do something better for the interval later. Config file, CSV field, or command-line argument?
         interval = PING_INTERVAL
         test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
 
@@ -421,7 +420,12 @@ def read_input_file(filename):
 
 
 def validate_host_config_mappings(tests: list):
-    # Extract all unique hostnames from tests
+    """
+    Check that each unique source hostname in the input CSV file has a corresponding entry in the host_config file. If
+    any source hostname is missing from the host_config file, log an error and halt execution.
+    :param tests: pass alL_tests from the main body as this argument
+    :return: None.
+    """
     unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
     for test in tests:
         unique_hostnames.add(test['source'])
