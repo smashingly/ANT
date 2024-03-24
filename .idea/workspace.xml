@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Docstring for validate_host_config_mappings. Minor typo correction.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
     </list>
@@ -298,7 +298,23 @@
       <option name="project" value="LOCAL" />
       <updated>1711081747777</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="v2.0.2. Fixed text/logging bug in check_dir_and_permissions. Refactored host_config validation into function for readability.">
+      <option name="closed" value="true" />
+      <created>1711100481631</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1711100481631</updated>
+    </task>
+    <task id="LOCAL-00028" summary="Docstring for validate_host_config_mappings. Minor typo correction.">
+      <option name="closed" value="true" />
+      <created>1711100730525</created>
+      <option name="number" value="00028" />
+      <option name="presentableId" value="LOCAL-00028" />
+      <option name="project" value="LOCAL" />
+      <updated>1711100730525</updated>
+    </task>
+    <option name="localTasksCounter" value="29" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -325,8 +341,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Fixed bug that failed to clean out &quot; ms&quot; at end of stddev RTT in CSV output" />
-    <MESSAGE value="Refactored numerous internals - same functionality as previous commit, except now we have Pythong logging module." />
     <MESSAGE value="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed." />
     <MESSAGE value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
     <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
@@ -350,6 +364,8 @@
     <MESSAGE value="v1.1.0. Refactored arg-parsing into get_cmdline_args(). Added -v/--version and VERSION constant." />
     <MESSAGE value="v2.0.0. All args are now optional with defaults. This breaks compatibility with previous versions." />
     <MESSAGE value="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one." />
-    <option name="LAST_COMMIT_MESSAGE" value="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one." />
+    <MESSAGE value="v2.0.2. Fixed text/logging bug in check_dir_and_permissions. Refactored host_config validation into function for readability." />
+    <MESSAGE value="Docstring for validate_host_config_mappings. Minor typo correction." />
+    <option name="LAST_COMMIT_MESSAGE" value="Docstring for validate_host_config_mappings. Minor typo correction." />
   </component>
 </project>

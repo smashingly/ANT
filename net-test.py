@@ -16,7 +16,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.0.3"
+VERSION = "2.1.0"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -52,20 +52,21 @@ def get_cmdline_args() -> argparse.Namespace:
                     f"Runs network tests on local & remote hosts based on input CSV file.")
 
     # Configure the command-line arguments
-    parser.add_argument("-i", "--input", default=DEFAULT_INPUT_CSV, metavar="<input file>",
-                        help=f"Input CSV file containing test parameters. (default is '{DEFAULT_INPUT_CSV}'). "
-                             f"The user account executing this script must have read permissions to this file.")
+    parser.add_argument("-i", "--input", metavar="<input file>", required=True,
+                        help=f"Input CSV file containing test parameters. Mandatory argument. "
+                             f"Executing user account must have read permissions.")
 
     parser.add_argument("-o", "--output", default=DEFAULT_RESULTS_DIR, metavar="<output dir>",
-                        help=f"Results output directory (default is '{DEFAULT_LOG_DIR}'). "
-                             "The user account executing this script must have write permissions to this folder.")
+                        help=f"Results output directory. Optional argument (defaults to '{DEFAULT_RESULTS_DIR}'). "
+                             "Executing user account must have read + write permissions for this directory.")
 
     parser.add_argument("-c", "--host-config", default=DEFAULT_HOST_CONFIG, metavar="<host config>",
-                        help=f"Override the default hosts config file (optional, default is {DEFAULT_HOST_CONFIG})")
+                        help=f"Override the default hosts config file. Optional argument "
+                             f"(defaults to {DEFAULT_HOST_CONFIG}). Executing user account must have read permissions.")
 
     parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR, metavar="<log dir>",
-                        help=f"Log file output directory (default is '{DEFAULT_LOG_DIR}'). "
-                             f"The user account executing this script must have read + write permissions to this folder.")
+                        help=f"Log file output directory. Optional argument (defaults to '{DEFAULT_LOG_DIR}'). "
+                             f"Executing user account must have read + write permissions to this directory.")
 
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}",
                         help="Display the version number and exit.")
