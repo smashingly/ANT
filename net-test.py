@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.3.1"
+VERSION = "2.4.0"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -29,7 +29,7 @@ BASE_NAME = "net-test"
 
 # Constants that users/devs may need to play with and change:
 TEST_TYPES = ["latency", "throughput", "jitter"]  # used in main code body loop
-PING_INTERVAL = 0.2  # seconds between pings, used across all latency tests. Used in run_tests().
+DEFAULT_PING_INTERVAL = 0.2  # seconds between pings, used across all latency tests. Used in run_tests().
 
 
 def get_cmdline_args() -> argparse.Namespace:
@@ -63,6 +63,10 @@ def get_cmdline_args() -> argparse.Namespace:
     parser.add_argument("-l", "--log-dir", default=DEFAULT_LOG_DIR, metavar="<log dir>",
                         help=f"Log file output directory. Optional argument (defaults to '{DEFAULT_LOG_DIR}'). "
                              f"Executing user account must have read + write permissions to this directory.")
+
+    parser.add_argument("-t", "--ping-interval", default=DEFAULT_PING_INTERVAL, metavar="<interval>",
+                        help=f"Interval between pings in seconds. Optional argument (defaults to {DEFAULT_PING_INTERVAL}). "
+                             "This is used for ping tests only. It is not used for throughput or jitter tests.")
 
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}",
                         help="Display the version number and exit.")
@@ -162,6 +166,7 @@ def read_input_file(filename):
     :return: a list of dictionaries, each representing a test to be run
     """
 
+    logger.debug(f"Reading input file {filename}.")
     csv_line_num = 1
     column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
 
@@ -191,29 +196,30 @@ def read_input_file(filename):
                 row_dict['csv_line_num'] = csv_line_num  # add a key to the dict to store the CSV line number
                 data.append(row_dict)
 
+    logger.debug(f"Read {csv_line_num} lines from input file {filename}.")
     return data
 
 
-def validate_host_config_mappings(tests: list):
+def host_config_validated_ok(tests: list) -> bool:
     """
-    Check that each unique source hostname in the input CSV file has a corresponding entry in the host_config file. If
-    any source hostname is missing from the host_config file, log an error and halt execution.
+    Checks that each unique source hostname in the input CSV file has a corresponding entry in the host_config file.
     :param tests: pass alL_tests from the main body as this argument
-    :return: None.
+    :return: True if all source hostnames in the input CSV file are present in the host_config file, False otherwise.
     """
     unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
-    for test in tests:
-        unique_hostnames.add(test['source'])
+    for t in tests:
+        unique_hostnames.add(t['source'])
     # Make a list of all hostnames in the host_config file
     all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
     # Check if each unique test source host in the CSV has an entry in the host_config file. If not, then quit.
     missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
     if missing_hostnames:
-        logger.critical(
-            f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
-        exit(1)  # Halt execution with error code (non-zero)
+        logger.error(
+            f"One or more source hostnames in input CSV are missing from host config file: {missing_hostnames}")
+        return False
     else:
         logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
+        return True
 
 
 def test_data_validated_ok(test_data: list):
@@ -226,6 +232,7 @@ def test_data_validated_ok(test_data: list):
     :param test_data: a list of dictionaries, each representing a test to be run (i.e. all_tests in main code body)
     :return: True if all tests are valid, False if any errors are found
     """
+    logger.debug("Validating test data in input file.")
     for item in test_data:
         csv_line_num = item.get('csv_line_num', None)
         id_num = item.get('id_number', None)
@@ -258,18 +265,21 @@ def test_data_validated_ok(test_data: list):
         logger.error(f"Duplicate id_number values found in input file: {duplicates}")
         return False
 
+    logger.debug("All test data in input file has been validated successfully.")
     return True
 
 
-def parse_ping_results(test_data: dict):
-    # This function parses the results of a ping test. It takes a dictionary as input, containing the following
-    # keys: id_number, timestamp, test_params, test_command, and raw_output. It returns a dictionary containing the
-    # parsed results, or None if the parsing fails.
-    id_number = test_data['id_number']
-    test_command = test_data['test_command']
-    raw_output = test_data['raw_output']
-    source = test_data['test_params']['source']
-    dest = test_data['test_params']['destination']
+def parse_ping_results(test_data: dict, raw_output: str) -> dict:
+    """
+    Parse the results of a ping test. This function takes a dictionary as input, containing the following
+    keys: id_number, test_params, and raw_output. It returns a dictionary containing the parsed results.
+    :param test_data: dictionary containing the test ID and parameters (source, dest, etc) of the test that was run.
+    :param raw_output: string containing the raw output from subprocess.check_output() for the ping test.
+    :return: a dictionary containing the parsed results of the ping test.
+    """
+    id_num = test_data['id_number']
+    source = test_data['source']
+    dest = test_data['destination']
 
     # We set these values to None here, to avoid repeating the same 2 lines of code in the If statements
     #  that detect: A) no min/avg/max line; B) >1 min/avg/max line; and C) running on Windows OS.
@@ -282,10 +292,10 @@ def parse_ping_results(test_data: dict):
     # Ensure that if raw_output has 0, or >1 lines containing 'min/avg/max', then we handle it gracefully. We log
     #  something, then do nothing else, because we've already set all the test result variables to None.
     if len(rtt_line) == 0:
-        logger.error(f"Test ID {id_number}: No line found in ping output containing 'min/avg/max'. Skipping test. "
+        logger.error(f"Test ID {id_num}: No line found in ping output containing 'min/avg/max'. Skipping test. "
                      f"Full output of test:\n{raw_output}")
     elif len(rtt_line) > 1:  # This situation is extremely unlikely
-        logger.error(f"Test ID {id_number}: Multiple lines found in ping output containing 'min/avg/max'. Skipping "
+        logger.error(f"Test ID {id_num}: Multiple lines found in ping output containing 'min/avg/max'. Skipping "
                      f"test. Full output of test:\n{raw_output}")
     else:
         # Keep the text between " = " and " ms"
@@ -298,7 +308,7 @@ def parse_ping_results(test_data: dict):
         # Create a list of any lines in the output that have 'packet loss' in them. There should only be one.
         loss_lines = [line for line in raw_output.split('\n') if 'packet loss' in line]
         if len(loss_lines) == 0:
-            logger.error(f"Test ID {id_number}: No line found in ping output containing 'packet loss'. Will record "
+            logger.error(f"Test ID {id_num}: No line found in ping output containing 'packet loss'. Will record "
                          f"RTT results but not tx/rx/lost packets. Full output of test:\n{raw_output}")
             success_msg_suffix = f"packet count data not found in ping output."
         else:
@@ -322,16 +332,12 @@ def parse_ping_results(test_data: dict):
         #  the necessary key/value data from the results dict, then generates the appropriate message.
         # Note: we're using a separate print() statement because the logger will only display console messages if they're
         #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
-        success_msg = (f"Test ID {id_number} (src: '{source}', dst: '{dest}', ping): Success. Result: "
+        success_msg = (f"Test ID {id_num} (src: '{source}', dst: '{dest}', ping): Success. Result: "
                        f"{min_rtt}/{avg_rtt}/{max_rtt}/{stddev_rtt} ms (min/avg/max/*dev), " + success_msg_suffix)
         print(success_msg)
         logger.info(success_msg)
 
     return {
-        "id_number": id_number,
-        "timestamp": str(test_data['timestamp']),
-        "source": test_data['test_params']['source'],
-        "destination": test_data['test_params']['destination'],
         "min_rtt": min_rtt,
         "avg_rtt": avg_rtt,
         "max_rtt": max_rtt,
@@ -339,83 +345,69 @@ def parse_ping_results(test_data: dict):
         "packets_txd": packets_txd,
         "packets_rxd": packets_rxd,
         "packet_loss_percent": packet_loss_percent,
-        "test_command": test_command
     }
 
 
-def parse_iperf_results(test_data: dict):
-    # iperf3 output is in JSON format, and for a throughput test, the data we need is at
-    # (data).end.sum_received.seconds, .bytes, and .bits_per_second.
+def parse_iperf_results(test_data: dict, raw_output: str) -> dict:
+    """
+    Parse the results of an iPerf3 test. This function takes a dictionary as input, containing the following
+    keys: id_number, test_params, and raw_output. It returns a dictionary containing the parsed results.
+    :param test_data: a dictionary containing the test ID, test parameters, and the raw output of the test command.
+    :param raw_output: the raw output of the iperf3 test command that was run.
+    :return: a dictionary containing the parsed results of the iPerf3 test.
+    """
 
-    id_number = test_data['id_number']
-    test_command = test_data['test_command']
-    raw_output = test_data['raw_output']
-    test_type = test_data['test_params']['test_type']
-    source = test_data['test_params']['source']
-    dest = test_data['test_params']['destination']
+    id_num = test_data['id_number']
+    t_type = test_data['test_type']
+    source = test_data['source']
+    dest = test_data['destination']
 
-    # Convert the JSON string to a Python dictionary
+    # Convert iPerf's JSON output to a Python dictionary
     command_result = json.loads(raw_output)
 
-    # TODO: ponder what could go wrong here, and think about error-handling / exception-handling. What if the
-    #  JSON is malformed? What if the JSON is missing the expected keys?
-
-    if test_type == "throughput":
+    # Dig through specific fields in the JSON for the test measurements we are interested in
+    if t_type == "throughput":
         parsed_results = {
-            "id_number": id_number,
-            "timestamp": str(test_data['timestamp']),
-            "source": test_data['test_params']['source'],
-            "destination": test_data['test_params']['destination'],
             "seconds": command_result['end']['sum_sent']['seconds'],
             "bytes": command_result['end']['sum_sent']['bytes'],
             "bits_per_second": command_result['end']['sum_sent']['bits_per_second'],
-            "test_command": test_command
         }
         short_form_results = f"{parsed_results['seconds']} seconds; {parsed_results['bytes']} bytes; " \
                              f"{parsed_results['bits_per_second']} bits/sec"
-    elif test_type == "jitter":
+    elif t_type == "jitter":
         parsed_results = {
-            "id_number": id_number,
-            "timestamp": str(test_data['timestamp']),
-            "source": test_data['test_params']['source'],
-            "destination": test_data['test_params']['destination'],
             "jitter_ms": command_result['end']['sum']['jitter_ms'],
             "packets": command_result['end']['sum']['packets'],
             "lost_packets": command_result['end']['sum']['lost_packets'],
-            "test_command": test_command
         }
         short_form_results = f"{parsed_results['jitter_ms']} ms jitter; {parsed_results['packets']} packets; " \
                              f"{parsed_results['lost_packets']} lost"
     else:
-        raise ValueError(f"Invalid test type '{test_type}' passed for test {id_number}.")
+        raise ValueError(f"Invalid test type '{t_type}' passed for test {id_num}.")
 
     # Log output to the screen and to logfile. We do this in each specific parse function so that we have access to
     #  the variables for that specific test type. This allows us to output short-form results in a one-line log entry.
     #  NOTE: We use a separate print() statement for the console output, because the logger will only display console
     #  messages at WARNING level or above, so we can't use one logger.info() call to convey success to the console.
-    msg = f"Test ID {id_number} (src: '{source}', dst: '{dest}', {test_type}): Success. Result: {short_form_results}"
+    msg = f"Test ID {id_num} (src: '{source}', dst: '{dest}', {t_type}): Success. Result: {short_form_results}"
     print(msg)
     logger.info(msg)
 
     return parsed_results
 
 
-def parse_results(id_number, timestamp, test_params, test_command, raw_output):
-    # This is a wrapper function to make the code inside run_test() tidier. It just calls the relevant parse function.
-    #  This abstraction also makes it easier add more test types in future.
-
-    test_data = {
-        "id_number": id_number,
-        "timestamp": str(timestamp),
-        "test_params": test_params,
-        "test_command": test_command,
-        "raw_output": raw_output
-    }
-
+def parse_results(test_params: dict, raw_output: str) -> dict:
+    """
+    Wrapper function to make the code inside run_test() tidier. It just calls the relevant parse function for the
+    test type that was run. This abstraction layer also makes it easier add more test types in the future.
+    :param test_params: a dict containing the parameters of the test that was run.
+    :param raw_output: the raw output of the test command that was run.
+    :return: whatever the wrapped parser functions return, which is a dict of test results.
+    """
     if test_params['test_type'] == "latency":
-        return parse_ping_results(test_data)
+        return parse_ping_results(test_params, raw_output)
     elif test_params['test_type'] in ["throughput", "jitter"]:
-        return parse_iperf_results(test_data)
+        return parse_iperf_results(test_params, raw_output)
 
 
 def run_test(test_params: dict):
@@ -471,6 +463,16 @@ def run_test(test_params: dict):
     timestamp = datetime.datetime.now()
     logger.info(f"Test ID {id_number} initiated. Running command: {test_command}")
 
+    # Data that appears in results_dict regardless of test type, or whether the test succeeds or fails
+    results_dict = {
+        "id_number": id_number,
+        "timestamp": str(timestamp),
+        "status": None,
+        "source": source,
+        "destination": destination,
+        "test_command": test_command
+    }
+
     try:
         # Execute the command and get the result.
         raw_output = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
@@ -478,13 +480,16 @@ def run_test(test_params: dict):
     except subprocess.CalledProcessError as e:
         logger.error(f"Test failure for test ID {id_number} (command '{test_command}'). "
                      f"Full output of test: {e.output.decode()}")
-        return None
+        results_dict["status"] = "Failure"
 
     else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
-        p_results = parse_results(id_number=id_number, timestamp=timestamp, test_params=test_params,
-                                  test_command=test_command, raw_output=raw_output)
+        p_results = parse_results(test_params=test_params, raw_output=raw_output)
         logger.debug(f"Test ID {id_number} parsed results: {p_results}")
-        return p_results
+        results_dict["status"] = "Success"
+        results_dict.update(p_results)       # merge the parsed test results dict into results_dict
+
+    # Regardless of whether the test succeeded or failed, we return the results_dict to the main code body.
+    return results_dict
 
 
 # This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
@@ -505,6 +510,7 @@ log_dir = args.log_dir
 input_csv = args.input
 results_dir = args.output
 host_config_file = args.host_config
+PING_INTERVAL = args.ping_interval
 
 # This must be checked *before* logging is enabled. Other directories/files are checked after logging is enabled.
 check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
@@ -541,22 +547,21 @@ my_ip_addr = socket.gethostbyname(my_hostname)
 #  the NIC or OS; it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
 logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_hostname} to {my_ip_addr}.")
 
-logger.debug("Reading input file and constructing test list.")
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
 
-# TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
-#  the test_type is valid, that the source and destination are valid, sources exist in the host config file, etc.
 if not test_data_validated_ok(all_tests):
     logger.critical(f"Input file '{input_csv}' contains invalid data. Halting execution.")
     exit(1)
-logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
 logger.info(f"Reading host configuration file {host_config_file}.")
 host_config = configparser.ConfigParser()
 host_config.read(host_config_file)
 
 # Check that the host_config file has corresponding entries for each unique test source hostname.
-validate_host_config_mappings(all_tests)
+if not host_config_validated_ok(all_tests):
+    logger.critical(f"Host configuration file '{host_config_file}' is missing entries for source hostnames. "
+                    f"Halting execution.")
+    exit(1)
 
 # initialise the all_results dictionary with its high-level keys
 all_results = {
@@ -565,24 +570,19 @@ all_results = {
     "jitter_tests": []
 }
 
-# Do the actual work - iterate over all_tests and run each
+# Do the actual work - iterate over all_tests and run each test, appending the results to all_results
 for test in all_tests:
     id_number = test['id_number']
     test_type = test['test_type']
 
     logger.debug(f"Test ID {id_number} of type '{test_type}' will be run.")
-
     test_results = run_test(test)
 
-    # if run_test failed (eg. SSH failure, test command failure, etc) then results will be None
-    # TODO: question: why does the following If statement appear to be redundant? It seems to be checking if
-    #  test_results is not None, and then if it's None. This seems like a logical contradiction. Check this.
-    if test_results is not None or test_results is None:
-        # Append the results to the appropriate list in all_results
-        key_name = test_type + "_tests"
-        all_results[key_name].append(test_results)
+    # Append the results to the appropriate list in all_results
+    key_name = test_type + "_tests"
+    all_results[key_name].append(test_results)
 
-# Write the results to a JSON file
+# Write the results to the output file in JSON format
 logger.info(f"All tests have been iterated over. Writing results to {results_filepath}.")
 with open(results_filepath, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)

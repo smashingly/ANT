@@ -4,7 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added csv_line_num functionality to read_input_file()">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Completed test_data_validate_ok()">
+      <change beforePath="$PROJECT_DIR$/.idea/csv-editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/csv-editor.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
@@ -331,7 +332,15 @@
       <option name="project" value="LOCAL" />
       <updated>1711331192212</updated>
     </task>
-    <option name="localTasksCounter" value="31" />
+    <task id="LOCAL-00031" summary="Completed test_data_validate_ok()">
+      <option name="closed" value="true" />
+      <created>1711334412313</created>
+      <option name="number" value="00031" />
+      <option name="presentableId" value="LOCAL-00031" />
+      <option name="project" value="LOCAL" />
+      <updated>1711334412313</updated>
+    </task>
+    <option name="localTasksCounter" value="32" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -358,7 +367,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
     <MESSAGE value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
     <MESSAGE value="Fixed wrong data in the two example test input CSVs" />
     <MESSAGE value="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results." />
@@ -383,6 +391,7 @@
     <MESSAGE value="Docstring for validate_host_config_mappings. Minor typo correction." />
     <MESSAGE value="Made -i/--input a mandatory parameter. Tweaked --help text." />
     <MESSAGE value="Added csv_line_num functionality to read_input_file()" />
-    <option name="LAST_COMMIT_MESSAGE" value="Added csv_line_num functionality to read_input_file()" />
+    <MESSAGE value="Completed test_data_validate_ok()" />
+    <option name="LAST_COMMIT_MESSAGE" value="Completed test_data_validate_ok()" />
   </component>
 </project>
