@@ -1,4 +1,3 @@
-
 import json
 import subprocess
 import csv
@@ -16,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -25,11 +24,11 @@ DEFAULT_INPUT_CSV = "./net-test.csv"
 DEFAULT_HOST_CONFIG = "./host_config.ini"
 
 # Other constants that are unlikely to need changing:
-LOGGING_LEVEL = logging.INFO        # can be overridden using the -V/--verbose argument
+LOGGING_LEVEL = logging.INFO  # can be overridden using the -V/--verbose argument
 BASE_NAME = "net-test"
 
 # Constants that users/devs may need to play with and change:
-TEST_TYPES = ["latency", "throughput", "jitter"]        # used in main code body loop
+TEST_TYPES = ["latency", "throughput", "jitter"]  # used in main code body loop
 PING_INTERVAL = 0.2  # seconds between pings, used across all latency tests. Used in run_tests().
 
 
@@ -43,9 +42,6 @@ def get_cmdline_args() -> argparse.Namespace:
     :return: parsed arguments (type: argparse.Namespace)
     """
 
-    # TODO: play with the 'epilog' arg to argparse.ArgumentParser() to make the help text more useful. Consider adding
-    #   an epilog that explains the CSV format, and/or how to use the host_config file, and the permissions required
-    #   for the log and results directories.
     # Parse command-line arguments, derive output and log-file naming, and set up the logger
     parser = argparse.ArgumentParser(
         description=f"Net-test (ANT) version {VERSION}.\n"
@@ -77,8 +73,6 @@ def get_cmdline_args() -> argparse.Namespace:
     #  console INFO, -vvv for file DEBUG plus console DEBUG. Don't overthink it though.
     parser.add_argument('-V', '--verbose', action='store_true',
                         help='Enable debug logging (applies to log file only)')
-    # TODO: could add a parameter "--help-csv" which explains the CSV format. It would call a separate function where the
-    #  help text is defined, to avoid cluttering the main code body.
 
     return parser.parse_args()
 
@@ -94,8 +88,8 @@ def setup_logging(name, log_level, file_path):
     :param file_path: path & filename of the log file to create.
     :return: logger object
     """
-    logger = logging.getLogger(name)    # Create a custom logger that we can use throughout the program
-    logger.setLevel(log_level)          # set to logging.DEBUG if you want additional output during development
+    logger = logging.getLogger(name)  # Create a custom logger that we can use throughout the program
+    logger.setLevel(log_level)  # set to logging.DEBUG if you want additional output during development
     # Create handlers. Naming convention: c = console, f = file
     c_handler = logging.StreamHandler()
     f_handler = logging.handlers.TimedRotatingFileHandler(
@@ -118,7 +112,7 @@ def setup_logging(name, log_level, file_path):
     return logger
 
 
-def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK, no_logger=False):
+def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK, no_logger=False):
     """
     Check if a directory exists and that it has the specified permissions for the user under which this program is
     executed. If it doesn't exist, or if it's not writable, log an error and halt
@@ -128,9 +122,12 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
     If set to True, output will be sent to console instead, using print() instead of logger.error()
     :param mode: access mode (eg. os.W_OK, os.R_OK, os.X_OK, etc), see os.access() for more details
     """
-    logging_enabled = not no_logger      # setting separate boolean purely to make the code more readable
+    # TODO: consider just using logging.getLogger(), and if that fails or returns None, then we have a mechanism to
+    #  know if logging is enabled or not. Then we don't need a function parameter to tell us if logging is enabled.
+    #  This will also solve the IDE warning in the IF block below ("logger might be referenced before assignment.")
+    logging_enabled = not no_logger  # setting separate boolean purely to make the code more readable
 
-    if logging_enabled:   # if logging is enabled
+    if logging_enabled:  # if logging is enabled
         logger = logging.getLogger(BASE_NAME)
         logger.debug(f"Checking for existence and permissions of {description.lower()} '{dir_path}'.")
 
@@ -153,11 +150,101 @@ def check_dir_and_permissions(dir_path, description ="Directory", mode = os.W_OK
         logger.debug(f"{description} {dir_path} exists and has the correct permissions.")
 
 
+def read_input_file(filename):
+    """
+    Read the input CSV file and return a list of dicts, each line being mapped to a dict representing 1 test. The
+    first row of the file MUST be a comment line starting with #. This can be used to convey to end users what
+    the column names are, but note that it is NOT used by the code to map column names to the data. We use
+    hard-coded column names, to protecdt against end-users from breaking the code by misspelling column names.
+    Any other rows that start with a # character will be ignored. This makes it possible to add more comments to the
+    CSV file, or to comment out specific tests.
+    :param filename: the name of the input CSV file
+    :return: a list of dictionaries, each representing a test to be run
+    """
+
+    csv_line_num = 1
+    column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
+
+    with open(filename, 'r') as input_file:
+        reader = csv.reader(input_file)
+        file_header = next(reader)  # grab the first row of file (the header row)
+        if not file_header[0].startswith("#"):
+            logger.critical(f"Input file {filename} must have a first row that starts with '#'. Halting execution.")
+            exit(1)
+
+        data = []
+
+        # Construct a dictionary from the remaining reader rows, converting empty CSV values to None.
+        for row in reader:
+            csv_line_num += 1
+            if row[0].startswith("#"):
+                # Skip rows starting with a hash character, but log this to the screen and to the logfile.
+                logger.warning(f"Skipping line {csv_line_num} in input file because it starts with a '#' character.")
+                logger.debug(f"\tContent of skipped line {csv_line_num}: {row}")
+                continue
+            else:
+                row_dict: dict[str, any]    # suppresses IDE int -> str warning when csv_line_num is added to the dict
+                row_dict = {column_headers[i]: value if value != "" else None for i, value in enumerate(row)}
+                # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
+                #  assign default values to missing test command parameters in the test-running function(s).
+                row_dict = {k: v for k, v in row_dict.items() if v is not None}
+                row_dict['csv_line_num'] = csv_line_num  # add a key to the dict to store the CSV line number
+                data.append(row_dict)
+
+    print(json.dumps(data, indent=4))
+    return data
+
+
+def validate_host_config_mappings(tests: list):
+    """
+    Check that each unique source hostname in the input CSV file has a corresponding entry in the host_config file. If
+    any source hostname is missing from the host_config file, log an error and halt execution.
+    :param tests: pass alL_tests from the main body as this argument
+    :return: None.
+    """
+    unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
+    for test in tests:
+        unique_hostnames.add(test['source'])
+    # Make a list of all hostnames in the host_config file
+    all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
+    # Check if each unique test source host in the CSV has an entry in the host_config file. If not, then quit.
+    missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
+    if missing_hostnames:
+        logger.critical(
+            f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
+        exit(1)  # Halt execution with error code (non-zero)
+    else:
+        logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
+
+
 def test_data_validated_ok(test_data: list):
     # this function will eventually run through test_data and validate things like test_type, source, destination, etc.
     # It will log any specific errors found, along with the offending line and field, and return False if any errors are
     # found. If no errors are found, it will return True.
-    return True        # TODO: for now this will do nothing (I'm doing this TDD-style)
+
+    # We already know that the input file starts with a "#" because this is checked in read_input_file().
+
+    # Candidates for validation:
+    # - check that all mandatory fields are present:
+    #  - id_number, test_type, source, destination - must be non-empty
+    #  - size is mandatory for throughput tests
+    # - id_number must be unique; if not, log a warning to the log but continue processing
+
+    for item in test_data:
+        id_number = item['id_number']
+        test_type = item['test_type']
+        source = item['source']
+        destination = item['destination']
+        size = item.get('size', None)
+        count = item.get('count', None)
+
+        # Check that all mandatory fields are present and non-empty
+        if not all([id_number, test_type, source, destination]):
+            logger.error(f"Test ID {id_number}: One or more mandatory fields are missing or empty. Skipping test.")
+            return False
+
+
+    return True  # TODO: for now this will do nothing (I'm doing this TDD-style)
 
 
 def parse_ping_results(test_data: dict):
@@ -183,7 +270,7 @@ def parse_ping_results(test_data: dict):
     if len(rtt_line) == 0:
         logger.error(f"Test ID {id_number}: No line found in ping output containing 'min/avg/max'. Skipping test. "
                      f"Full output of test:\n{raw_output}")
-    elif len(rtt_line) > 1:     # This situation is extremely unlikely
+    elif len(rtt_line) > 1:  # This situation is extremely unlikely
         logger.error(f"Test ID {id_number}: Multiple lines found in ping output containing 'min/avg/max'. Skipping "
                      f"test. Full output of test:\n{raw_output}")
     else:
@@ -206,9 +293,9 @@ def parse_ping_results(test_data: dict):
             # Example line 1 (MacOS, Linux): "10 packets transmitted, 10 packets received, 0.0% packet loss"
             # Example line 2 (some Linux): "10 packets transmitted, 10 received, 0.0% packet loss"
             loss_line = loss_lines[0]
-            split_line = loss_line.split(', ')       # ['10 packets transmitted', '10 packets received', etc...]
-            packets_txd = int(split_line[0].split(' ')[0])      # ['10', 'packets', 'transmitted'] -> '10' -> 10
-            packets_rxd = int(split_line[1].split(' ')[0])         # ['10', 'packets', 'received'] -> '10' -> 10
+            split_line = loss_line.split(', ')  # ['10 packets transmitted', '10 packets received', etc...]
+            packets_txd = int(split_line[0].split(' ')[0])  # ['10', 'packets', 'transmitted'] -> '10' -> 10
+            packets_rxd = int(split_line[1].split(' ')[0])  # ['10', 'packets', 'received'] -> '10' -> 10
 
             # It's hard to reliably parse loss% out of the string because some Linux OSes use slightly different
             # wording, or insert "+1 duplicates" in the middle of the string. So we calculate the loss ourselves.
@@ -284,7 +371,7 @@ def parse_iperf_results(test_data: dict):
             "test_command": test_command
         }
         short_form_results = f"{parsed_results['jitter_ms']} ms jitter; {parsed_results['packets']} packets; " \
-                                f"{parsed_results['lost_packets']} lost"
+                             f"{parsed_results['lost_packets']} lost"
     else:
         raise ValueError(f"Invalid test type '{test_type}' passed for test {id_number}.")
 
@@ -362,7 +449,8 @@ def run_test(test_params: dict):
         # Run the test locally - do nothing, just log the answer
         logger.info(f"Test ID {id_number} source '{source}' matches local machine details. Test will be run locally.")
     else:
-        logger.info(f"Test ID {id_number} source '{source}' does not match local machine. Constructing SSH remote command.")
+        logger.info(
+            f"Test ID {id_number} source '{source}' does not match local machine. Constructing SSH remote command.")
         test_command = f"ssh -n -o ConnectTimeout=2 {username}@{source} '{test_command}'"
 
     # this timestamp records the test start time, so we grab it here just before the test is executed
@@ -383,63 +471,6 @@ def run_test(test_params: dict):
                                   test_command=test_command, raw_output=raw_output)
         logger.debug(f"Test ID {id_number} parsed results: {p_results}")
         return p_results
-
-
-def read_input_file(filename):
-    # Read the input CSV file and return a list of dicts, each line being mapped to a dictionary, based on hard-coded
-    # column names. The first row of the file MUST be a comment line starting with #. This can be used to explain to
-    # end users what the column names are, but note that the code doesn't use the header row to map column names to
-    # the data. It uses hard-coded column names. This is to prevent the end user from making mistakes in the header
-    # row, and to prevent the end user from changing the column names without changing the code. Any other rows that
-    # start with a # character will be ignored.  This makes it easy to comment out specific tests in the input file.
-
-    column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
-
-    with open(filename, 'r') as input_file:
-        reader = csv.reader(input_file)
-        file_header = next(reader)                       # grab the first row of file (the header row)
-        if not file_header[0].startswith("#"):
-            logger.critical(f"Input file {filename} must have a first row that starts with '#'. Halting execution.")
-            exit(1)
-
-        data = []
-
-        # Construct a dictionary from the remaining reader rows, converting empty CSV values to None.
-        for row in reader:
-            if row[0].startswith("#"):
-                # Skip rows starting with a hash character, but log this to the screen and to the logfile.
-                logger.warning(f"Skipping row in input file starting with a '#' character: {row}")
-                continue
-            else:
-                row_dict = {column_headers[i]: value if value != "" else None for i, value in enumerate(row)}
-                # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
-                #  assign default values to missing test command parameters in the test-running function(s).
-                row_dict = {k: v for k, v in row_dict.items() if v is not None}
-                data.append(row_dict)
-
-    return data
-
-
-def validate_host_config_mappings(tests: list):
-    """
-    Check that each unique source hostname in the input CSV file has a corresponding entry in the host_config file. If
-    any source hostname is missing from the host_config file, log an error and halt execution.
-    :param tests: pass alL_tests from the main body as this argument
-    :return: None.
-    """
-    unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
-    for test in tests:
-        unique_hostnames.add(test['source'])
-    # Make a list of all hostnames in the host_config file
-    all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
-    # Check if each unique test source host in the CSV has an entry in the host_config file. If not, then quit.
-    missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
-    if missing_hostnames:
-        logger.critical(
-            f"One or more source hostnames in {input_csv} are missing from {host_config_file}: {missing_hostnames}")
-        exit(1)  # Halt execution with error code (non-zero)
-    else:
-        logger.info(f"All source hostnames in {input_csv} are present in {host_config_file}.")
 
 
 # This script will not work under Windows, for a couple of reasons. Firstly, the output of the ping command is vastly
@@ -509,7 +540,6 @@ logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 logger.info(f"Reading host configuration file {host_config_file}.")
 host_config = configparser.ConfigParser()
 host_config.read(host_config_file)
-# TODO: add validation of the config file, making sure that the relevant fields are defined and not empty etc
 
 # Check that the host_config file has corresponding entries for each unique test source hostname.
 validate_host_config_mappings(all_tests)
@@ -527,18 +557,21 @@ for test in all_tests:
     test_type = test['test_type']
 
     # Check test_type's validity (see constant, declared just after the import statements)
+    # TODO: probably going to move this validation into the test_data_validated_ok() function - TBC
     if test_type not in TEST_TYPES:
         logger.warning(f"Unknown test type '{test_type}' for test {id_number}. Skipping test.")
         continue
     else:
-        logger.debug(f"Test ID {id_number} of type {test_type} will be run.")
-        results = run_test(test)
+        logger.debug(f"Test ID {id_number} of type '{test_type}' will be run.")
+        test_results = run_test(test)
 
         # if run_test failed (eg. SSH failure, test command failure, etc) then results will be None
-        if results is not None or results is None:
+        # TODO: question: why does the following If statement appear to be redundant? It seems to be checking if
+        #  test_results is not None, and then if it's None. This seems like a logical contradiction. Check this.
+        if test_results is not None or test_results is None:
             # Append the results to the appropriate list in all_results
             key_name = test_type + "_tests"
-            all_results[key_name].append(results)
+            all_results[key_name].append(test_results)
 
 # Write the results to a JSON file
 logger.info(f"All tests have been iterated over. Writing results to {results_filepath}.")

@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Docstring for validate_host_config_mappings. Minor typo correction.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Made -i/--input a mandatory parameter. Tweaked --help text.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -30,17 +31,17 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.net-test.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/ash/Dev/Python/MSD-ANT&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.net-test.executor": "Run",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/Users/ash/Dev/Python/MSD-ANT",
+    "settings.editor.selected.configurable": "preferences.pluginManager"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
@@ -314,7 +315,15 @@
       <option name="project" value="LOCAL" />
       <updated>1711100730525</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="Made -i/--input a mandatory parameter. Tweaked --help text.">
+      <option name="closed" value="true" />
+      <created>1711319968937</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1711319968937</updated>
+    </task>
+    <option name="localTasksCounter" value="30" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -341,7 +350,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="New CSV format with more fields. Built-in ping command generation that automatically determines if a local or remote/SSH command is needed." />
     <MESSAGE value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
     <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
     <MESSAGE value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
@@ -366,6 +374,7 @@
     <MESSAGE value="v2.0.1. Fixed logic bug in check_dir_and_permissions, consolidated checks into one." />
     <MESSAGE value="v2.0.2. Fixed text/logging bug in check_dir_and_permissions. Refactored host_config validation into function for readability." />
     <MESSAGE value="Docstring for validate_host_config_mappings. Minor typo correction." />
-    <option name="LAST_COMMIT_MESSAGE" value="Docstring for validate_host_config_mappings. Minor typo correction." />
+    <MESSAGE value="Made -i/--input a mandatory parameter. Tweaked --help text." />
+    <option name="LAST_COMMIT_MESSAGE" value="Made -i/--input a mandatory parameter. Tweaked --help text." />
   </component>
 </project>
