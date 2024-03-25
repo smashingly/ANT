@@ -2,5 +2,5 @@
 1,latency,ashs-mbp,8.8.8.8,5,56
 2,latency,ashs-mbp,raspberrypi,20,1450
 3,latency,raspberrypi,192.168.0.1,,
-#4,throughput,ashs-mbp,raspberrypi,,10M
+4,throughput,ashs-mbp,raspberrypi,,10M
 5,jitter,ashs-mbp,raspberrypi,,

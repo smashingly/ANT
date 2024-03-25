@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.2.0"
+VERSION = "2.3.1"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -191,7 +191,6 @@ def read_input_file(filename):
                 row_dict['csv_line_num'] = csv_line_num  # add a key to the dict to store the CSV line number
                 data.append(row_dict)
 
-    print(json.dumps(data, indent=4))
     return data
 
 
@@ -218,33 +217,48 @@ def validate_host_config_mappings(tests: list):
 
 
 def test_data_validated_ok(test_data: list):
-    # this function will eventually run through test_data and validate things like test_type, source, destination, etc.
-    # It will log any specific errors found, along with the offending line and field, and return False if any errors are
-    # found. If no errors are found, it will return True.
-
-    # We already know that the input file starts with a "#" because this is checked in read_input_file().
-
-    # Candidates for validation:
-    # - check that all mandatory fields are present:
-    #  - id_number, test_type, source, destination - must be non-empty
-    #  - size is mandatory for throughput tests
-    # - id_number must be unique; if not, log a warning to the log but continue processing
-
+    """
+    Validate the test data read from the input CSV file. This function will run through the test data and validate
+    things like test_type, source, destination, etc. It will log any specific errors found, along with the offending
+    line and field, and return False if any errors are found. If no errors are found, it will return True. NOTE: we
+    already test for the header-row (starting with '#') in read_input_file(), so we don't need to check for it here.
+    This is not deep validation, i.e. we aren't checking for valid hostnames or IP addresses.
+    :param test_data: a list of dictionaries, each representing a test to be run (i.e. all_tests in main code body)
+    :return: True if all tests are valid, False if any errors are found
+    """
     for item in test_data:
-        id_number = item['id_number']
-        test_type = item['test_type']
-        source = item['source']
-        destination = item['destination']
+        csv_line_num = item.get('csv_line_num', None)
+        id_num = item.get('id_number', None)
+        t_type = item.get('test_type', None)
+        source = item.get('source', None)
+        destination = item.get('destination', None)
         size = item.get('size', None)
-        count = item.get('count', None)
 
         # Check that all mandatory fields are present and non-empty
-        if not all([id_number, test_type, source, destination]):
-            logger.error(f"Test ID {id_number}: One or more mandatory fields are missing or empty. Skipping test.")
+        if not all([id_num, t_type, source, destination]):
+            logger.error(f"CSV line {csv_line_num}: One or more mandatory fields "
+                         f"(id_number, test_type, source, destination) are missing or empty.")
             return False
 
+        # Check that the test type is valid
+        if t_type not in TEST_TYPES:
+            logger.error(f"CSV line {csv_line_num}: Invalid test type '{t_type}'. It must be one of: {TEST_TYPES}.")
+            return False
 
-    return True  # TODO: for now this will do nothing (I'm doing this TDD-style)
+        # If test type is 'throughput', check that the 'size' field is non-empty
+        if t_type == "throughput" and not size:
+            logger.error(f"CSV line {csv_line_num}: 'size' field is missing or empty for throughput test. "
+                         f"Value must be in the form '100M', '1G', etc.")
+            return False
+
+    # Check for duplicate id_number values
+    id_numbers = [t['id_number'] for t in test_data]
+    duplicates = [item for item in set(id_numbers) if id_numbers.count(item) > 1]
+    if duplicates:
+        logger.error(f"Duplicate id_number values found in input file: {duplicates}")
+        return False
+
+    return True
 
 
 def parse_ping_results(test_data: dict):
@@ -533,7 +547,7 @@ all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict repr
 # TODO: consider doing an initial validation of all the imported test data to ensure that it's valid. Eg. check that
 #  the test_type is valid, that the source and destination are valid, sources exist in the host config file, etc.
 if not test_data_validated_ok(all_tests):
-    logger.critical(f"Input file {input_csv} contains invalid data. Halting execution.")
+    logger.critical(f"Input file '{input_csv}' contains invalid data. Halting execution.")
     exit(1)
 logger.debug(f"Read {len(all_tests)} rows in input file {input_csv}.")
 
@@ -556,22 +570,17 @@ for test in all_tests:
     id_number = test['id_number']
     test_type = test['test_type']
 
-    # Check test_type's validity (see constant, declared just after the import statements)
-    # TODO: probably going to move this validation into the test_data_validated_ok() function - TBC
-    if test_type not in TEST_TYPES:
-        logger.warning(f"Unknown test type '{test_type}' for test {id_number}. Skipping test.")
-        continue
-    else:
-        logger.debug(f"Test ID {id_number} of type '{test_type}' will be run.")
-        test_results = run_test(test)
+    logger.debug(f"Test ID {id_number} of type '{test_type}' will be run.")
 
-        # if run_test failed (eg. SSH failure, test command failure, etc) then results will be None
-        # TODO: question: why does the following If statement appear to be redundant? It seems to be checking if
-        #  test_results is not None, and then if it's None. This seems like a logical contradiction. Check this.
-        if test_results is not None or test_results is None:
-            # Append the results to the appropriate list in all_results
-            key_name = test_type + "_tests"
-            all_results[key_name].append(test_results)
+    test_results = run_test(test)
+
+    # if run_test failed (eg. SSH failure, test command failure, etc) then results will be None
+    # TODO: question: why does the following If statement appear to be redundant? It seems to be checking if
+    #  test_results is not None, and then if it's None. This seems like a logical contradiction. Check this.
+    if test_results is not None or test_results is None:
+        # Append the results to the appropriate list in all_results
+        key_name = test_type + "_tests"
+        all_results[key_name].append(test_results)
 
 # Write the results to a JSON file
 logger.info(f"All tests have been iterated over. Writing results to {results_filepath}.")

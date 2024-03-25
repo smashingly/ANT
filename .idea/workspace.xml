@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Made -i/--input a mandatory parameter. Tweaked --help text.">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added csv_line_num functionality to read_input_file()">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests.csv" afterDir="false" />
@@ -323,7 +323,15 @@
       <option name="project" value="LOCAL" />
       <updated>1711319968937</updated>
     </task>
-    <option name="localTasksCounter" value="30" />
+    <task id="LOCAL-00030" summary="Added csv_line_num functionality to read_input_file()">
+      <option name="closed" value="true" />
+      <created>1711331192212</created>
+      <option name="number" value="00030" />
+      <option name="presentableId" value="LOCAL-00030" />
+      <option name="project" value="LOCAL" />
+      <updated>1711331192212</updated>
+    </task>
+    <option name="localTasksCounter" value="31" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -350,7 +358,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Revamped to output in JSON, and now handles throughput and jitter tests. Functional but needs testing and refactoring." />
     <MESSAGE value="Improved success-logging for all test types (was only in place for pings)." />
     <MESSAGE value="Moved hostname/FQDN lookup to one-off at start of code. Improved logging." />
     <MESSAGE value="Fixed wrong data in the two example test input CSVs" />
@@ -375,6 +382,7 @@
     <MESSAGE value="v2.0.2. Fixed text/logging bug in check_dir_and_permissions. Refactored host_config validation into function for readability." />
     <MESSAGE value="Docstring for validate_host_config_mappings. Minor typo correction." />
     <MESSAGE value="Made -i/--input a mandatory parameter. Tweaked --help text." />
-    <option name="LAST_COMMIT_MESSAGE" value="Made -i/--input a mandatory parameter. Tweaked --help text." />
+    <MESSAGE value="Added csv_line_num functionality to read_input_file()" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added csv_line_num functionality to read_input_file()" />
   </component>
 </project>
