@@ -4,9 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="v2.4.0. Significant refactoring and streamlining. Added -t/--ping-interval. Failure is now explicitly indicated in results. Removed redundant 'if' in main body.">
-      <change beforePath="$PROJECT_DIR$/tests/tests-msd.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/tests.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests/tests-example.csv" afterDir="false" />
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Moved tests-example.csv to main folder, deleted ./tests. No code changes">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests-example.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests-example.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -47,6 +48,7 @@
       <recent name="$PROJECT_DIR$/tests" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/" />
       <recent name="$PROJECT_DIR$/results" />
     </key>
   </component>
@@ -346,7 +348,23 @@
       <option name="project" value="LOCAL" />
       <updated>1711348261455</updated>
     </task>
-    <option name="localTasksCounter" value="33" />
+    <task id="LOCAL-00033" summary="Renamed tests.csv to tests-example.csv to stop overwriting CSVs when doing git pull on edats003">
+      <option name="closed" value="true" />
+      <created>1711348704615</created>
+      <option name="number" value="00033" />
+      <option name="presentableId" value="LOCAL-00033" />
+      <option name="project" value="LOCAL" />
+      <updated>1711348704615</updated>
+    </task>
+    <task id="LOCAL-00034" summary="Moved tests-example.csv to main folder, deleted ./tests. No code changes">
+      <option name="closed" value="true" />
+      <created>1711348934256</created>
+      <option name="number" value="00034" />
+      <option name="presentableId" value="LOCAL-00034" />
+      <option name="project" value="LOCAL" />
+      <updated>1711348934256</updated>
+    </task>
+    <option name="localTasksCounter" value="35" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -373,8 +391,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Fixed wrong data in the two example test input CSVs" />
-    <MESSAGE value="Added detection in parse_ping_results() to skip packet loss detection if OS = Windows. Added src/dst info in success message in parse_ping_results." />
     <MESSAGE value="Added argparse. Added INI file configparser. Check host/user mappings on startup." />
     <MESSAGE value="Fix: compare unique test hosts with hostnames (not section title) from host_config" />
     <MESSAGE value="Added check for lack of header row" />
@@ -398,6 +414,8 @@
     <MESSAGE value="Added csv_line_num functionality to read_input_file()" />
     <MESSAGE value="Completed test_data_validate_ok()" />
     <MESSAGE value="v2.4.0. Significant refactoring and streamlining. Added -t/--ping-interval. Failure is now explicitly indicated in results. Removed redundant 'if' in main body." />
-    <option name="LAST_COMMIT_MESSAGE" value="v2.4.0. Significant refactoring and streamlining. Added -t/--ping-interval. Failure is now explicitly indicated in results. Removed redundant 'if' in main body." />
+    <MESSAGE value="Renamed tests.csv to tests-example.csv to stop overwriting CSVs when doing git pull on edats003" />
+    <MESSAGE value="Moved tests-example.csv to main folder, deleted ./tests. No code changes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Moved tests-example.csv to main folder, deleted ./tests. No code changes" />
   </component>
 </project>

@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.4.0"
+VERSION = "2.5"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -168,6 +168,8 @@ def read_input_file(filename):
 
     logger.debug(f"Reading input file {filename}.")
     csv_line_num = 1
+    # TODO: factor this assignment's RHS out to a CONSTANT at the start of the code. Just makes it a little more
+    #  obvious if future devs want to change the CSV columns, add new fields, etc.
     column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
 
     with open(filename, 'r') as input_file:
@@ -189,7 +191,8 @@ def read_input_file(filename):
                 continue
             else:
                 row_dict: dict[str, any]    # suppresses IDE int -> str warning when csv_line_num is added to the dict
-                row_dict = {column_headers[i]: value if value != "" else None for i, value in enumerate(row)}
+                # We use .strip() on 'value' in case users include a space after the comma in the CSV file.
+                row_dict = {column_headers[i]: value.strip() if value != "" else None for i, value in enumerate(row)}
                 # Iterate over the dict and remove any key-value pairs where the value is None. This makes it easier to
                 #  assign default values to missing test command parameters in the test-running function(s).
                 row_dict = {k: v for k, v in row_dict.items() if v is not None}
