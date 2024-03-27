@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.6.3"
+VERSION = "2.6.4"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -153,7 +153,7 @@ def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK):
         logger.debug(f"{description} {dir_path} exists and has the correct permissions.")
 
 
-def read_input_file(filename) -> list[dict]:
+def read_input_file(filename) -> list:
     """
     Read the input CSV file and return a list of dicts, each line being mapped to a dict representing 1 test. The
     first row of the file MUST be a comment line starting with #. This can be used to convey to end users what
