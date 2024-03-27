@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Moved tests-example.csv to main folder, deleted ./tests. No code changes">
+    <list default="true" id="4e1edb40-ad04-402c-b896-578ba420f920" name="Changes" comment="Added whitespace strip() when importing individual CSV fields">
+      <change afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/net-test.py" beforeDir="false" afterPath="$PROJECT_DIR$/net-test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests-example.csv" beforeDir="false" afterPath="$PROJECT_DIR$/tests-example.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -364,7 +363,15 @@
       <option name="project" value="LOCAL" />
       <updated>1711348934256</updated>
     </task>
-    <option name="localTasksCounter" value="35" />
+    <task id="LOCAL-00035" summary="Added whitespace strip() when importing individual CSV fields">
+      <option name="closed" value="true" />
+      <created>1711412953166</created>
+      <option name="number" value="00035" />
+      <option name="presentableId" value="LOCAL-00035" />
+      <option name="project" value="LOCAL" />
+      <updated>1711412953166</updated>
+    </task>
+    <option name="localTasksCounter" value="36" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -391,7 +398,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Added argparse. Added INI file configparser. Check host/user mappings on startup." />
     <MESSAGE value="Fix: compare unique test hosts with hostnames (not section title) from host_config" />
     <MESSAGE value="Added check for lack of header row" />
     <MESSAGE value="New header-row logic to prevent KeyErrors" />
@@ -416,6 +422,7 @@
     <MESSAGE value="v2.4.0. Significant refactoring and streamlining. Added -t/--ping-interval. Failure is now explicitly indicated in results. Removed redundant 'if' in main body." />
     <MESSAGE value="Renamed tests.csv to tests-example.csv to stop overwriting CSVs when doing git pull on edats003" />
     <MESSAGE value="Moved tests-example.csv to main folder, deleted ./tests. No code changes" />
-    <option name="LAST_COMMIT_MESSAGE" value="Moved tests-example.csv to main folder, deleted ./tests. No code changes" />
+    <MESSAGE value="Added whitespace strip() when importing individual CSV fields" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added whitespace strip() when importing individual CSV fields" />
   </component>
 </project>
