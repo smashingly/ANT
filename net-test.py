@@ -15,13 +15,14 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.5"
+VERSION = "2.5.1"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
 DEFAULT_RESULTS_DIR = "./"
 DEFAULT_INPUT_CSV = "./net-test.csv"
 DEFAULT_HOST_CONFIG = "./host_config.ini"
+CSV_COLUMNS = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
 
 # Other constants that are unlikely to need changing:
 LOGGING_LEVEL = logging.INFO  # can be overridden using the -V/--verbose argument
@@ -168,9 +169,7 @@ def read_input_file(filename):
 
     logger.debug(f"Reading input file {filename}.")
     csv_line_num = 1
-    # TODO: factor this assignment's RHS out to a CONSTANT at the start of the code. Just makes it a little more
-    #  obvious if future devs want to change the CSV columns, add new fields, etc.
-    column_headers = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
+    column_headers = CSV_COLUMNS
 
     with open(filename, 'r') as input_file:
         reader = csv.reader(input_file)
