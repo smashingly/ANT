@@ -2,7 +2,7 @@ import json
 import subprocess
 import csv
 import os
-import datetime
+from datetime import datetime, timedelta
 import logging.handlers
 import logging
 import socket
@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.5.1"
+VERSION = "2.6"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -25,8 +25,9 @@ DEFAULT_HOST_CONFIG = "./host_config.ini"
 CSV_COLUMNS = ['id_number', 'test_type', 'source', 'destination', 'count', 'size']
 
 # Other constants that are unlikely to need changing:
-LOGGING_LEVEL = logging.INFO  # can be overridden using the -V/--verbose argument
 BASE_NAME = "net-test"
+LOGGER_NAME = "net-test"
+LOGGING_LEVEL = logging.INFO  # can be overridden using the -V/--verbose argument
 
 # Constants that users/devs may need to play with and change:
 TEST_TYPES = ["latency", "throughput", "jitter"]  # used in main code body loop
@@ -65,17 +66,17 @@ def get_cmdline_args() -> argparse.Namespace:
                         help=f"Log file output directory. Optional argument (defaults to '{DEFAULT_LOG_DIR}'). "
                              f"Executing user account must have read + write permissions to this directory.")
 
+    parser.add_argument("--max-age", nargs='?', const=60, type=int, default=None, metavar="<days>",
+                        help="Optional. Delete any JSON results files with an age greater than <days> (calculated "
+                             "from file modification date). If --max-age is used without <days> then a default of "
+                             "60 days applies.")
+
     parser.add_argument("-t", "--ping-interval", default=DEFAULT_PING_INTERVAL, metavar="<interval>",
                         help=f"Interval between pings in seconds. Optional argument (defaults to {DEFAULT_PING_INTERVAL}). "
                              "This is used for ping tests only. It is not used for throughput or jitter tests.")
 
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}",
                         help="Display the version number and exit.")
-    # TODO: evaluate the level of most INFO logging messages, and decide whether --verbose could also set the console log to
-    #  DEBUG or INFO level. This would be useful for troubleshooting, but it would also make the console output very noisy.
-    #  But that might also point to some INFO level messages needing to be downgraded to DEBUG. Or we could have separate
-    #  flags for console and file logging levels.  Or levels of verbosity, eg. -v for file DEBUG, -vv for file DEBUG plus
-    #  console INFO, -vvv for file DEBUG plus console DEBUG. Don't overthink it though.
     parser.add_argument('-V', '--verbose', action='store_true',
                         help='Enable debug logging (applies to log file only)')
 
@@ -113,27 +114,24 @@ def setup_logging(name, log_level, file_path):
     logger.addHandler(c_handler)
     logger.addHandler(f_handler)
 
-    print(f"Logging to {file_path}")
     return logger
 
 
-def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK, no_logger=False):
+def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK):
     """
     Check if a directory exists and that it has the specified permissions for the user under which this program is
-    executed. If it doesn't exist, or if it's not writable, log an error and halt
+    executed. If it doesn't exist, or if it's not writable, log an error and halt. The function automatically checks
+    if logging has been set up yet, and if it hasn't, then it outputs any error messages using print() instead of
+    logger.error(). This is because the first call to this function is to check the log_file directory, and at that
+    stage logging hasn't yet been set up.
     :param dir_path: directory to be checked
     :param description: allows the error message to be more meaningful, eg. "Log directory <...> does not exist"
-    :param no_logger: set to True if no logger is set up when this function is called (ie. when checking log_dir).
-    If set to True, output will be sent to console instead, using print() instead of logger.error()
     :param mode: access mode (eg. os.W_OK, os.R_OK, os.X_OK, etc), see os.access() for more details
     """
-    # TODO: consider just using logging.getLogger(), and if that fails or returns None, then we have a mechanism to
-    #  know if logging is enabled or not. Then we don't need a function parameter to tell us if logging is enabled.
-    #  This will also solve the IDE warning in the IF block below ("logger might be referenced before assignment.")
-    logging_enabled = not no_logger  # setting separate boolean purely to make the code more readable
+    logging_enabled = True if LOGGER_NAME in logging.Logger.manager.loggerDict else False
 
     if logging_enabled:  # if logging is enabled
-        logger = logging.getLogger(BASE_NAME)
+        logger = logging.getLogger(LOGGER_NAME)
         logger.debug(f"Checking for existence and permissions of {description.lower()} '{dir_path}'.")
 
     # We OR both of these tests, because either of these tests will fail if the file doesn't exist or the user doesn't
@@ -211,8 +209,10 @@ def host_config_validated_ok(tests: list) -> bool:
     unique_hostnames = set()  # Using a set automatically prevents duplicates, as sets don't allow them
     for t in tests:
         unique_hostnames.add(t['source'])
+    logger.debug(f"Found {len(unique_hostnames)} unique source hostnames in input CSV file.")
     # Make a list of all hostnames in the host_config file
     all_test_hosts = [host_config[section]['hostname'] for section in host_config.sections()]
+    logger.debug(f"Found {len(all_test_hosts)} source hostnames in host config file.")
     # Check if each unique test source host in the CSV has an entry in the host_config file. If not, then quit.
     missing_hostnames = [hostname for hostname in unique_hostnames if hostname not in all_test_hosts]
     if missing_hostnames:
@@ -269,6 +269,30 @@ def test_data_validated_ok(test_data: list):
 
     logger.debug("All test data in input file has been validated successfully.")
     return True
+
+
+def delete_old_result_files(directory, max_days):
+    """
+    Delete old result files from the results directory. This function will delete any files in the results directory
+    that match the naming convention of the script's output files, and that are older than the specified number of days.
+    :param directory: the directory to search for old result files
+    :param max_days: the maximum age of files to keep (in days)
+    :return: None
+    """
+    match_prefix = f"{BASE_NAME}_results-"  # the prefix of the script's output files
+    match_suffix = ".json"  # the suffix of the script's output files
+    logger.info(f"Will delete files older than {max_days} days in directory '{directory}' "
+                f"with pattern '{match_prefix}*{match_suffix}'")
+    current_time = datetime.now()
+    for filename in os.listdir(directory):
+        if filename.startswith(match_prefix) and filename.endswith(match_suffix):
+            file_path = os.path.join(directory, filename)
+            file_stat = os.stat(file_path)
+            file_modified_time = datetime.fromtimestamp(file_stat.st_mtime)
+            file_age = current_time - file_modified_time
+            if file_age > timedelta(days=max_days):
+                os.remove(file_path)
+                logger.debug(f"Deleted old file: {filename} (age: {file_age.days} days)")
 
 
 def parse_ping_results(test_data: dict, raw_output: str) -> dict:
@@ -415,7 +439,7 @@ def parse_results(test_params: dict, raw_output: str) -> dict:
 def run_test(test_params: dict):
     """
     Run a test based on the parameters in the input dictionary. The dictionary should contain the following keys:
-    - id_number: a unique identifier for the test. Mandatory.
+    - id_num: a unique identifier for the test. Mandatory.
     - source: the source IP or hostname for the test. Used for constructing the test command (ie. local or SSH).
     Default is 'localhost' if not supplied.
     - destination: the destination IP or hostname for the test. Mandatory.
@@ -424,7 +448,7 @@ def run_test(test_params: dict):
     :param test_params: a dictionary containing the parameters for the test
     :return: a list containing the results of the test
     """
-    id_number = test_params['id_number']  # this is a required field, so we can assume it's present
+    id_num = test_params['id_number']  # this is a required field, so we can assume it's present
     source = test_params.get('source', 'localhost')  # if value was missing from CSV, assume 'localhost'
     destination = test_params['destination']  # required field
     username = host_config.get(source, 'username')  # get this host's username from the host_config file
@@ -439,35 +463,35 @@ def run_test(test_params: dict):
     elif test_params['test_type'] == "throughput":
         size = test_params.get('size', None)  # mandatory for throughput tests - throw exception if missing
         if size is None:
-            logger.error(f"Size parameter missing for test {id_number}. This field is required for throughput tests.")
+            logger.error(f"Size parameter missing for test {id_num}. This field is required for throughput tests.")
             raise ValueError(
-                f"Size parameter missing for test {id_number}. This field is required for throughput tests.")
+                f"Size parameter missing for test {id_num}. This field is required for throughput tests.")
         else:
             test_command = f"iperf3 -c {destination} -n {size} -4 --json"
     elif test_params['test_type'] == "jitter":
         test_command = f"iperf3 -c {destination} -u -4 --json"
     else:
-        logger.error(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
-        raise ValueError(f"Unknown test type '{test_params['test_type']}' for test {id_number}. Skipping test.")
+        logger.error(f"Unknown test type '{test_params['test_type']}' for test {id_num}. Skipping test.")
+        raise ValueError(f"Unknown test type '{test_params['test_type']}' for test {id_num}. Skipping test.")
 
     # Get the current machine's hostname, FQDN and name-lookup the IP from the hostname. The user should not ever be
     #  putting an IP address into the 'source' field, but in case they do, we'll try to handle it gracefully. Also
     #  note that on some systems (particularly home networks) gethostname() will include ".local" or ".gateway".
     if source in [my_hostname, my_fqdn, my_ip_addr, "localhost", "127.0.0.1"]:
-        # Run the test locally - do nothing, just log the answer
-        logger.info(f"Test ID {id_number} source '{source}' matches local machine details. Test will be run locally.")
+        # Run the test locally - do nothing here, because test_command already = a local test
+        logger.info(f"Test ID {id_num} source '{source}' matches local machine details. Test will be run locally.")
     else:
-        logger.info(
-            f"Test ID {id_number} source '{source}' does not match local machine. Constructing SSH remote command.")
+        # Wrap test_command in an SSH command to run the test on a remote machine
+        logger.info(f"Test ID {id_num} source '{source}' is not local machine. Constructing SSH remote command.")
         test_command = f"ssh -n -o ConnectTimeout=2 {username}@{source} '{test_command}'"
 
     # this timestamp records the test start time, so we grab it here just before the test is executed
-    timestamp = datetime.datetime.now()
-    logger.info(f"Test ID {id_number} initiated. Running command: {test_command}")
+    timestamp = datetime.now()
+    logger.info(f"Test ID {id_num} initiated. Running command: {test_command}")
 
     # Data that appears in results_dict regardless of test type, or whether the test succeeds or fails
     results_dict = {
-        "id_number": id_number,
+        "id_number": id_num,
         "timestamp": str(timestamp),
         "status": None,
         "source": source,
@@ -480,13 +504,13 @@ def run_test(test_params: dict):
         raw_output = subprocess.check_output(test_command, shell=True, stderr=subprocess.STDOUT).decode()
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Test failure for test ID {id_number} (command '{test_command}'). "
-                     f"Full output of test: {e.output.decode()}")
+        logger.error(f"Test failure for test ID {id_num} (command '{test_command}'). "
+                     f"Full output of test command: {e.output.decode()}")
         results_dict["status"] = "Failure"
 
     else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
         p_results = parse_results(test_params=test_params, raw_output=raw_output)
-        logger.debug(f"Test ID {id_number} parsed results: {p_results}")
+        logger.debug(f"Test ID {id_num} parsed results: {p_results}")
         results_dict["status"] = "Success"
         results_dict.update(p_results)       # merge the parsed test results dict into results_dict
 
@@ -502,7 +526,7 @@ if os.name == 'nt':
     exit(1)
 
 # Record the start-time of program execution so we can output the duration at the end of the script
-execution_start_time = datetime.datetime.now()
+execution_start_time = datetime.now()
 
 # Process command-line arguments
 args = get_cmdline_args()
@@ -515,29 +539,33 @@ host_config_file = args.host_config
 PING_INTERVAL = args.ping_interval
 
 # This must be checked *before* logging is enabled. Other directories/files are checked after logging is enabled.
-check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK, no_logger=True)
+check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK)
 
 # Append yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
-results_filename = f"{BASE_NAME}_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+results_filename = f"{BASE_NAME}_results-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
 results_filepath = os.path.join(results_dir, f"{results_filename}")
-# TODO: for output files, we may want to implement a clean-up that runs on any output files that are older than
-#  a certain age, to avoid filling up the disk with JSON files.
 
-"""
-########################### Start of logger setup and configuration ###########################
-*****  MINIMISE THE AMOUNT OF CODE THAT COMES BEFORE LOGGER SETUP, AS LOGGING WILL NOT BE *****
-*****  RUNNING UNTIL AFTER THIS SECTION!                                                  *****"""
+""""###############################################################################
+#   BEGIN LOGGER SETUP AS EARLY AS POSSIBLE TO ENSURE ALL OPERATIONS ARE LOGGED.  #
+#   AVOID ADDING CODE ABOVE THIS POINT TO PREVENT UNLOGGED OPERATIONS.            #
+################################################################################"""
 log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
-logger_name = BASE_NAME
-logger = setup_logging(name=logger_name, log_level=LOGGING_LEVEL, file_path=log_file)
-"""######################### End of logger setup and configuration #########################"""
+logger = setup_logging(name=LOGGER_NAME, log_level=LOGGING_LEVEL, file_path=log_file)
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
-logger.info(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}")
+logger.info(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}. Logging level: {LOGGING_LEVEL}.")
+print(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}")
+print(f"Logging to {log_file} at level {LOGGING_LEVEL}.")
 
 # Check that our input and output directories exist and have the correct permissions
 check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
 check_dir_and_permissions(dir_path=input_csv, description="Input file", mode=os.R_OK)
+
+if args.max_age is not None:
+    max_age_days = args.max_age
+    logger.info(f"Deleting results files older than {max_age_days} days.")
+    print(f"Deleting results files older than {max_age_days} days...")
+    delete_old_result_files(directory=results_dir, max_days=max_age_days)
 
 # Get the local hostname, FQDN and IP address. This is used to decide if a given test will be run locally, or via SSH.
 logger.debug("Getting local machine's hostname, FQDN and IP address.")
@@ -545,8 +573,8 @@ my_hostname = socket.gethostname().lower().split('.')[0]  # Extract the part bef
 my_fqdn = socket.getfqdn().lower()
 my_ip_addr = socket.gethostbyname(my_hostname)
 
-# The wording of this log entry is carefully chosen, to make it clear that the my_ip_addr is not pulled from
-#  the NIC or OS; it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
+# The wording of this log entry is carefully chosen, to make it clear that 'my_ip_addr' is not pulled from the NIC
+#  the OS, it's derived by performing a lookup on my_hostname, which will use OS DNS settings or /etc/hosts.
 logger.info(f"My hostname: {my_hostname}. My FQDN: {my_fqdn}. DNS resolves {my_hostname} to {my_ip_addr}.")
 
 all_tests = read_input_file(input_csv)  # a list of dictionaries, each dict representing a test to be run
@@ -589,7 +617,7 @@ logger.info(f"All tests have been iterated over. Writing results to {results_fil
 with open(results_filepath, 'w') as json_file:
     json.dump(all_results, json_file, indent=4)
 
-execution_duration = datetime.datetime.now() - execution_start_time
+execution_duration = datetime.now() - execution_start_time
 # Create a string that expresses the duration in a human-readable format, hh:mm:ss
 execution_duration_str = str(execution_duration).split('.')[0]  # remove the microseconds from the string
 
