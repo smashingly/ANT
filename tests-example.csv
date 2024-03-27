@@ -4,6 +4,8 @@
 3,latency,raspberrypi,192.168.0.1,,
 4,throughput,ashs-mbp,raspberrypi,,20M
 5,jitter,ashs-mbp,raspberrypi,,
-6,latency,raspberrypi,nonexistenthostname,,
-7,throughput,ashs-mbp,nonexistenthostname,,20M
-8,jitter,ashs-mbp,nonexistenthostname,,
+6,throughput,raspberrypi,ashs-mbp,,20M
+7,jitter,raspberrypi,ashs-mbp,,
+8,latency,raspberrypi,nonexistenthostname,,
+9,throughput,ashs-mbp,nonexistenthostname,,20M
+10,jitter,ashs-mbp,nonexistenthostname,,

@@ -15,7 +15,7 @@ import configparser
 # The minor version is incremented when new features are added in a backwards-compatible manner. The patch version is
 # incremented when backwards-compatible bug fixes are made. The version number is stored as a string, and is used in
 # the --version argument of the argparse.ArgumentParser() object. See https://semver.org/ for more details.
-VERSION = "2.6"
+VERSION = "2.6.3"
 
 # Default directory locations. These defaults are assigned to variables during argpase setup in get_cmdline_args().
 DEFAULT_LOG_DIR = "./"
@@ -72,8 +72,8 @@ def get_cmdline_args() -> argparse.Namespace:
                              "60 days applies.")
 
     parser.add_argument("-t", "--ping-interval", default=DEFAULT_PING_INTERVAL, metavar="<interval>",
-                        help=f"Interval between pings in seconds. Optional argument (defaults to {DEFAULT_PING_INTERVAL}). "
-                             "This is used for ping tests only. It is not used for throughput or jitter tests.")
+                        help=f"Interval between pings in seconds. Optional argument (defaults to "
+                             f"{DEFAULT_PING_INTERVAL}). Used in ping/latency tests ONLY.")
 
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s version {VERSION}",
                         help="Display the version number and exit.")
@@ -83,7 +83,7 @@ def get_cmdline_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def setup_logging(name, log_level, file_path):
+def setup_logging(name, log_level, file_path) -> logging.Logger:
     """
     Set up the logging for the script. This function is called at the start of the script, and returns a logger object
     which can be used to log messages. The logger object is returned so that it can be used in the main code body,
@@ -131,7 +131,7 @@ def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK):
     logging_enabled = True if LOGGER_NAME in logging.Logger.manager.loggerDict else False
 
     if logging_enabled:  # if logging is enabled
-        logger = logging.getLogger(LOGGER_NAME)
+        # logger = logging.getLogger(LOGGER_NAME)
         logger.debug(f"Checking for existence and permissions of {description.lower()} '{dir_path}'.")
 
     # We OR both of these tests, because either of these tests will fail if the file doesn't exist or the user doesn't
@@ -153,7 +153,7 @@ def check_dir_and_permissions(dir_path, description="Directory", mode=os.W_OK):
         logger.debug(f"{description} {dir_path} exists and has the correct permissions.")
 
 
-def read_input_file(filename):
+def read_input_file(filename) -> list[dict]:
     """
     Read the input CSV file and return a list of dicts, each line being mapped to a dict representing 1 test. The
     first row of the file MUST be a comment line starting with #. This can be used to convey to end users what
@@ -224,7 +224,7 @@ def host_config_validated_ok(tests: list) -> bool:
         return True
 
 
-def test_data_validated_ok(test_data: list):
+def test_data_validated_ok(test_data: list) -> bool:
     """
     Validate the test data read from the input CSV file. This function will run through the test data and validate
     things like test_type, source, destination, etc. It will log any specific errors found, along with the offending
@@ -271,7 +271,7 @@ def test_data_validated_ok(test_data: list):
     return True
 
 
-def delete_old_result_files(directory, max_days):
+def delete_old_result_files(directory: str, max_days: int) -> None:
     """
     Delete old result files from the results directory. This function will delete any files in the results directory
     that match the naming convention of the script's output files, and that are older than the specified number of days.
@@ -279,7 +279,7 @@ def delete_old_result_files(directory, max_days):
     :param max_days: the maximum age of files to keep (in days)
     :return: None
     """
-    match_prefix = f"{BASE_NAME}_results-"  # the prefix of the script's output files
+    match_prefix = results_prefix   # the naming prefix of the script's output files
     match_suffix = ".json"  # the suffix of the script's output files
     logger.info(f"Will delete files older than {max_days} days in directory '{directory}' "
                 f"with pattern '{match_prefix}*{match_suffix}'")
@@ -353,10 +353,10 @@ def parse_ping_results(test_data: dict, raw_output: str) -> dict:
             success_msg_suffix = f"{packets_txd}/{packets_rxd}/{packet_loss_percent}% (#tx/#rx/loss)"
 
         # Log output to the screen and to logfile. We do this inside the parse functions because we have easy access to
-        #  the variables for the specific test type. This allows us to output short-form results in a one-line log entry.
+        #  the variables for the specific test type. This enables output of short-form results in a one-line log entry.
         #  We could do this in run_test() but we'd need a block of if-logic that works out the test type then extracts
         #  the necessary key/value data from the results dict, then generates the appropriate message.
-        # Note: we're using a separate print() statement because the logger will only display console messages if they're
+        # Note: we're using a separate print() here because the logger will only display console messages if they're
         #  at WARNING or above severity, and it's inappropriate to log success using a WARNING/ERROR severity.
         success_msg = (f"Test ID {id_num} (src: '{source}', dst: '{dest}', ping): Success. Result: "
                        f"{min_rtt}/{avg_rtt}/{max_rtt}/{stddev_rtt} ms (min/avg/max/*dev), " + success_msg_suffix)
@@ -390,6 +390,17 @@ def parse_iperf_results(test_data: dict, raw_output: str) -> dict:
 
     # Convert iPerf's JSON output to a Python dictionary
     command_result = json.loads(raw_output)
+
+    # There is a situation in which iPerf3 will run, but cannot connect to the server (connection refused, etc). and
+    #  weirdly iPerf3/subprocess.check_output() will return exit code 0. Luckily iPerf3 returns JSON with an 'error'
+    #  key whose value is a string explaining the error.
+    if "error" in command_result:
+        logger.error(f"Test ID {id_num} (src: '{source}', dst: '{dest}', {t_type}): Failure. iPerf3 encountered "
+                     f"an error: '{command_result['error']}'")
+        logger.debug(f"Full JSON returned by iPerf3: {command_result}")
+        return {
+            "error": command_result['error']
+        }
 
     # Dig through specific fields in the JSON for the test measurements we are interested in
     if t_type == "throughput":
@@ -436,7 +447,7 @@ def parse_results(test_params: dict, raw_output: str) -> dict:
         return parse_iperf_results(test_params, raw_output)
 
 
-def run_test(test_params: dict):
+def run_test(test_params: dict) -> dict:
     """
     Run a test based on the parameters in the input dictionary. The dictionary should contain the following keys:
     - id_num: a unique identifier for the test. Mandatory.
@@ -446,7 +457,7 @@ def run_test(test_params: dict):
     - count: the number of pings to send (optional; default 10)
     - size: the size of the ping packet (optional; default 56 bytes)
     :param test_params: a dictionary containing the parameters for the test
-    :return: a list containing the results of the test
+    :return: a dictionary containing the results of the test
     """
     id_num = test_params['id_number']  # this is a required field, so we can assume it's present
     source = test_params.get('source', 'localhost')  # if value was missing from CSV, assume 'localhost'
@@ -456,7 +467,6 @@ def run_test(test_params: dict):
     if test_params['test_type'] == "latency":
         size = test_params.get('size', 56)  # optional field; go for 56 byte packet size if not specified
         count = test_params.get('count', 10)  # optional field; set default of 10 pings if not specified
-        # TODO: do something better for the interval later. Config file, CSV field, or command-line argument?
         interval = PING_INTERVAL
         test_command = f"ping -c {count} -i {interval} -s {size} {destination}"
 
@@ -508,11 +518,19 @@ def run_test(test_params: dict):
                      f"Full output of test command: {e.output.decode()}")
         results_dict["status"] = "Failure"
 
-    else:  # if the command didn't trigger a CalledProcessError, assume success and return the parsed results
+    else:  # if the command didn't trigger a CalledProcessError, we can parse the results
         p_results = parse_results(test_params=test_params, raw_output=raw_output)
         logger.debug(f"Test ID {id_num} parsed results: {p_results}")
-        results_dict["status"] = "Success"
-        results_dict.update(p_results)       # merge the parsed test results dict into results_dict
+        # This next check is because older iPerf3 versions can return exit code 0 under some failure conditions (eg.
+        # connection refused), when --json is used. Luckily in these situations iPerf3 returns a JSON object with an
+        # 'error' key. So parse_iperf_results() looks for this and passes on iPerf's 'error' key/value pair here.
+        if p_results.get("error", None) is not None:
+            results_dict["status"] = "Failure"
+        else:
+            results_dict["status"] = "Success"
+
+        # Regardless, we'll merge p_results into results_dict so that our output file contains the error value/string.
+        results_dict.update(p_results)
 
     # Regardless of whether the test succeeded or failed, we return the results_dict to the main code body.
     return results_dict
@@ -542,7 +560,8 @@ PING_INTERVAL = args.ping_interval
 check_dir_and_permissions(dir_path=log_dir, description="Log directory", mode=os.W_OK | os.R_OK)
 
 # Append yyyymmddhhmmss timestamping to the output filename, eg. net-test_2024-03-19_125400.json
-results_filename = f"{BASE_NAME}_results-{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
+results_prefix = f"{BASE_NAME}_results-"
+results_filename = f"{results_prefix}{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.json"
 results_filepath = os.path.join(results_dir, f"{results_filename}")
 
 """"###############################################################################
@@ -553,9 +572,10 @@ log_file = os.path.join(log_dir, f"{BASE_NAME}.log")
 logger = setup_logging(name=LOGGER_NAME, log_level=LOGGING_LEVEL, file_path=log_file)
 
 logger.info(f"{'*' * 20} Initial startup {'*' * 20}")
-logger.info(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}. Logging level: {LOGGING_LEVEL}.")
+logger.info(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}. "
+            f"Logging level: {logging.getLevelName(LOGGING_LEVEL)}.")
 print(f"Input CSV file is: {input_csv}. Output file will be: {results_filepath}")
-print(f"Logging to {log_file} at level {LOGGING_LEVEL}.")
+print(f"Logging to {log_file}. Logging level: {logging.getLevelName(LOGGING_LEVEL)}.")
 
 # Check that our input and output directories exist and have the correct permissions
 check_dir_and_permissions(dir_path=results_dir, description="Results directory", mode=os.W_OK)
