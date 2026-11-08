@@ -1,7 +1,43 @@
-.DS_Store
-.venv
-.idea/*
+# Specific to this app
 .host_config.ini
 .ping_tests.sh
 results
 log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# Virtual environments
+.venv
+.env
+.claude
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Geo data (large, downloaded separately)
+GeoLite2-City.mmdb
+data/
+
+# Local cache / output
+*.log
+*.sql.gz
+backups/
